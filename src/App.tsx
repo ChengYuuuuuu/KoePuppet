@@ -390,6 +390,11 @@ export default function App() {
               >
                 {editMode ? '确认' : '编辑'}
               </button>
+              <div className="app-tips">
+                <div className="app-tips-title">Tips</div>
+                <div>· 第一次加载需要大约两分钟</div>
+                <div>· 勾选人声分离会让结果更加准确，但是增加一倍的等待时间</div>
+              </div>
             </div>
           </div>
         </div>
@@ -411,12 +416,6 @@ export default function App() {
           editMode={editMode}
           processedRanges={processedRanges}
         />
-      </div>
-
-      <div className="app-tips">
-        <div className="app-tips-title">Tips</div>
-        <div>· 第一次加载需要大约两分钟</div>
-        <div>· 勾选人声分离会让结果更加准确，但是增加一倍的等待时间</div>
       </div>
     </div>
   );

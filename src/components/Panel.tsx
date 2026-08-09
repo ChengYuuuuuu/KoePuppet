@@ -24,6 +24,10 @@ import { AudioEngine, computeSway } from '../utils/audio';
 const HANDLE_RADIUS = 8;
 const ROTATE_RADIUS = 10;
 
+function isNarrowScreen(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)').matches === true;
+}
+
 function findBeatIndex(t: number, beatTimes: number[]): number {
   let idx = -1;
   for (let i = 0; i < beatTimes.length; i++) {
@@ -262,9 +266,11 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     }
 
     function getHitHandle(mx: number, my: number, handles: { x: number; y: number; type: string }[]): { index: number; type: string } | null {
+      const narrow = isNarrowScreen();
+      const s = narrow ? 2.6 : 1;
       for (let i = 0; i < handles.length; i++) {
         const h = handles[i];
-        const r = h.type === 'rotate' ? ROTATE_RADIUS : HANDLE_RADIUS;
+        const r = (h.type === 'rotate' ? ROTATE_RADIUS : HANDLE_RADIUS) * s;
         if (Math.abs(mx - h.x) < r && Math.abs(my - h.y) < r) {
           return { index: i, type: h.type };
         }
@@ -383,13 +389,15 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
 
     animFrameId = requestAnimationFrame(frame);
 
-    const onMouseDown = (e: MouseEvent) => {
+    const onPointerDown = (e: PointerEvent) => {
       if (editInteraction.current) return;
+      if (!e.isPrimary) return;
 
       const d = animDataRef.current;
       const rect2 = canvas.getBoundingClientRect();
 
       if (d.editMode) {
+        e.preventDefault();
         const mx = e.clientX - rect2.left;
         const my = e.clientY - rect2.top;
         const center = getCanvasCenter(rect2.width, rect2.height);
@@ -410,6 +418,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
                 editInteraction.current = { type: 'resize', startX: mx, startY: my, cx: assetCenter.x, cy: assetCenter.y, startT: { ...currentT } };
                 canvas.style.cursor = 'nwse-resize';
               }
+              try { canvas.setPointerCapture(e.pointerId); } catch {}
               return;
             }
           }
@@ -425,6 +434,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
             const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {}, vb, d.baseImageLoaded);
             editInteraction.current = { type: 'move', startX: mx, startY: my, cx: assetCenter.x, cy: assetCenter.y, startT: { ...currentT } };
             canvas.style.cursor = 'grabbing';
+            try { canvas.setPointerCapture(e.pointerId); } catch {}
             return;
           }
         }
@@ -436,7 +446,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
 
     };
 
-    const onMouseMove = (e: MouseEvent) => {
+    const onPointerMove = (e: PointerEvent) => {
       const d = animDataRef.current;
       const rect2 = canvas.getBoundingClientRect();
 
@@ -471,30 +481,34 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
       }
     };
 
-    const onMouseUp = () => {
+    const onPointerUp = (e: PointerEvent) => {
       if (editInteraction.current) {
         editInteraction.current = null;
         canvas.style.cursor = 'default';
+        try { canvas.releasePointerCapture(e.pointerId); } catch {}
       }
     };
 
-    canvas.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
 
     return () => {
       running = false;
       if (animFrameId !== null) cancelAnimationFrame(animFrameId);
-      canvas.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
       editInteraction.current = null;
     };
   }, [ref, renderTick, baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded]);
 
-  const handleLyricMouseDown = (e: React.MouseEvent) => {
+  const handleLyricPointerDown = (e: React.PointerEvent) => {
     if (!editMode) return;
     e.stopPropagation();
+    e.preventDefault();
 
     const currentT = transforms?.lyric ?? { ...DEFAULT_TRANSFORM };
     selectionInteraction.current = {
@@ -506,7 +520,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
       onSelectAsset?.('lyric');
     }
 
-    const onMouseMove = (ev: MouseEvent) => {
+    const onPointerMove = (ev: PointerEvent) => {
       if (!selectionInteraction.current || !onEditTransform) return;
       const si = selectionInteraction.current;
       const dx = ev.clientX - si.startX;
@@ -514,19 +528,20 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
       onEditTransform('lyric', { ...si.startT, x: si.startT.x + dx, y: si.startT.y + dy });
     };
 
-    const onMouseUp = () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
       selectionInteraction.current = null;
     };
 
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
   };
 
-  function handleSelectionHandleMouseDown(type: 'resize' | 'rotate') {
-    return (e: React.MouseEvent) => {
+  function handleSelectionHandlePointerDown(type: 'resize' | 'rotate') {
+    return (e: React.PointerEvent) => {
       e.stopPropagation();
+      e.preventDefault();
       const currentT = transforms?.lyric ?? { ...DEFAULT_TRANSFORM };
       const boxEl = e.currentTarget.parentElement!;
       const rect = boxEl.getBoundingClientRect();
@@ -535,7 +550,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
 
       selectionInteraction.current = { type, startX: e.clientX, startY: e.clientY, startT: { ...currentT }, centerX, centerY };
 
-      const onMouseMove = (ev: MouseEvent) => {
+      const onPointerMove = (ev: PointerEvent) => {
         if (!selectionInteraction.current || !onEditTransform) return;
         const si = selectionInteraction.current;
         if (si.type === 'resize') {
@@ -551,14 +566,14 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
         }
       };
 
-      const onMouseUp = () => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
+      const onPointerUp = () => {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
         selectionInteraction.current = null;
       };
 
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
     };
   }
 
@@ -574,15 +589,15 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
             } : {}),
             ...(editMode && selectedAsset === 'lyric' ? { height: lyricContentHeight + 40 } : {}),
           }}
-          onMouseDown={handleLyricMouseDown}
+          onPointerDown={handleLyricPointerDown}
         >
           {editMode && selectedAsset === 'lyric' && (
             <div className="lyric-selection-box">
-              <div className="lyric-handle lyric-handle-tl" onMouseDown={handleSelectionHandleMouseDown('resize')} />
-              <div className="lyric-handle lyric-handle-tr" onMouseDown={handleSelectionHandleMouseDown('resize')} />
-              <div className="lyric-handle lyric-handle-bl" onMouseDown={handleSelectionHandleMouseDown('resize')} />
-              <div className="lyric-handle lyric-handle-br" onMouseDown={handleSelectionHandleMouseDown('resize')} />
-              <div className="lyric-handle-rotate" onMouseDown={handleSelectionHandleMouseDown('rotate')} />
+              <div className="lyric-handle lyric-handle-tl" onPointerDown={handleSelectionHandlePointerDown('resize')} />
+              <div className="lyric-handle lyric-handle-tr" onPointerDown={handleSelectionHandlePointerDown('resize')} />
+              <div className="lyric-handle lyric-handle-bl" onPointerDown={handleSelectionHandlePointerDown('resize')} />
+              <div className="lyric-handle lyric-handle-br" onPointerDown={handleSelectionHandlePointerDown('resize')} />
+              <div className="lyric-handle-rotate" onPointerDown={handleSelectionHandlePointerDown('rotate')} />
               <div className="lyric-rotate-line" />
             </div>
           )}

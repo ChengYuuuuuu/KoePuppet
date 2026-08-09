@@ -58,6 +58,7 @@ html, body, #root {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none;
 }
 
 .canvas-edit-btn {
@@ -566,6 +567,7 @@ html, body, #root {
 .lyric-editable {
   pointer-events: auto;
   cursor: grab;
+  touch-action: none;
 }
 
 .lyric-selected {
@@ -661,6 +663,7 @@ html, body, #root {
   box-shadow: 0 1px 4px rgba(0,0,0,0.15);
   z-index: 12;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .lyric-handle-tl {
@@ -700,6 +703,7 @@ html, body, #root {
   cursor: crosshair;
   z-index: 12;
   pointer-events: auto;
+  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -725,9 +729,9 @@ html, body, #root {
   pointer-events: none;
 }
 
-/* ── Tips (bottom-left) ── */
+/* ── Tips (bottom-left of display panel) ── */
 .app-tips {
-  position: fixed;
+  position: absolute;
   left: 16px;
   bottom: 16px;
   z-index: 50;
@@ -771,5 +775,108 @@ html, body, #root {
     box-shadow: none;
     border-top: 1px solid #e5e5ea;
     flex: 1;
+    gap: 12px;
   }
+
+  /* Larger touch targets */
+  .song-import input {
+    height: 40px;
+    font-size: 16px;
+    border-radius: 20px;
+  }
+  .song-import button {
+    height: 40px;
+    font-size: 15px;
+    border-radius: 20px;
+  }
+  .slider-row label {
+    font-size: 13px;
+  }
+  .slider-row input[type="range"] {
+    height: 8px;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  .slider-row input[type="range"]::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  .slider-row .val {
+    font-size: 13px;
+  }
+  .toggle-row span {
+    font-size: 13px;
+  }
+  .asset-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    border-radius: 18px;
+  }
+  .model-retry-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .play-btn-big {
+    width: 56px;
+    height: 56px;
+  }
+  .right-panel-logo {
+    font-size: 20px;
+  }
+
+  /* Edit button: top-right, larger */
+  .canvas-edit-btn {
+    top: 12px;
+    right: 12px;
+    left: auto;
+    padding: 10px 20px;
+    font-size: 16px;
+  }
+
+  /* Tips: smaller */
+  .app-tips {
+    left: 10px;
+    bottom: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    max-width: 260px;
+  }
+  .app-tips-title {
+    font-size: 15px;
+  }
+
+  /* Lyric container: full-width canvas */
+  .lyric-container {
+    left: 8%;
+    width: 84%;
+    min-width: 0;
+    max-width: none;
+  }
+  .lyric-item {
+    padding: 10px 12px;
+  }
+  .lyric-original {
+    font-size: 14px;
+  }
+  .lyric-translated {
+    font-size: 16px;
+  }
+
+  /* Bigger edit handles */
+  .lyric-handle {
+    width: 22px;
+    height: 22px;
+  }
+  .lyric-handle-rotate {
+    width: 26px;
+    height: 26px;
+    font-size: 18px;
+    top: -30px;
+  }
+  .lyric-handle-tl { top: -11px; left: -11px; }
+  .lyric-handle-tr { top: -11px; right: -11px; }
+  .lyric-handle-bl { bottom: -11px; left: -11px; }
+  .lyric-handle-br { bottom: -11px; right: -11px; }
 }
