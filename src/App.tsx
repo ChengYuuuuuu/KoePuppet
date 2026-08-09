@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { CanvasPreview, RightPanel, DebugPanel } from './components/Panel';
+import { CanvasPreview, RightPanel } from './components/Panel';
 import { AudioEngine, updateBounce } from './utils/audio';
 import { parseLRC, getCurrentLyric } from './utils/api';
 import { loadImage } from './utils/renderer';
@@ -68,8 +68,6 @@ export default function App() {
   const [mouthShape, setMouthShape] = useState<MouthShape>('closed');
   const [bounceScale, setBounceScale] = useState({ scaleX: 1, scaleY: 1 });
   const [beatTimes, setBeatTimes] = useState<number[]>([]);
-  const [currentBPM, setCurrentBPM] = useState<number | null>(null);
-  const [showDebug, setShowDebug] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [processedRanges, setProcessedRanges] = useState<TimeRange[]>([]);
 
@@ -274,8 +272,7 @@ export default function App() {
               all.sort((a, b) => a.start - b.start);
               whisperTimelineRef.current = all;
             },
-            onBpm: (bpm, beats) => {
-              if (bpm) setCurrentBPM(bpm);
+            onBpm: (_bpm, beats) => {
               if (beats.length > 0) setBeatTimes(beats);
             },
             onError: (msg) => console.error('流式分析错误:', msg),
@@ -295,8 +292,7 @@ export default function App() {
 
   const handleFileAnalyze = useCallback((result: { bpm: number | null; beats: number[]; mouthPoints: MouthPoint[] }) => {
     whisperTimelineRef.current = result.mouthPoints;
-    if (result.bpm && result.beats.length > 0) {
-      setCurrentBPM(result.bpm);
+    if (result.beats.length > 0) {
       setBeatTimes(result.beats);
     }
   }, []);
@@ -356,17 +352,6 @@ export default function App() {
     audioEngineRef.current?.setVolume(playbackState.volume);
   }, [playbackState.volume]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
-        e.preventDefault();
-        setShowDebug(v => !v);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
   return (
     <div className="app-container">
       <div className="main-layout">
@@ -381,6 +366,7 @@ export default function App() {
                 playbackState={playbackState}
                 mouthShape={mouthShape}
                 bounceScale={bounceScale}
+                beatTimes={beatTimes}
                 baseImageLoaded={baseImageLoaded}
                 mouthImagesLoaded={mouthImagesLoaded}
                 eyeImagesLoaded={eyeImagesLoaded}
@@ -427,20 +413,11 @@ export default function App() {
         />
       </div>
 
-      <DebugPanel
-        show={showDebug}
-        onClose={() => setShowDebug(false)}
-        bpm={currentBPM}
-        energy={playbackState.energy}
-        currentTime={playbackState.currentTime}
-        duration={playbackState.duration}
-        beatTimes={beatTimes}
-        nextBeatIndex={bounceStateRef.current.currentBeatIndex}
-        mouthShape={mouthShape}
-        bounceScale={bounceScale}
-        energyHistoryRef={energyHistoryRef}
-        isPlaying={playbackState.isPlaying}
-      />
+      <div className="app-tips">
+        <div className="app-tips-title">Tips</div>
+        <div>· 第一次加载需要大约两分钟</div>
+        <div>· 勾选人声分离会让结果更加准确，但是增加一倍的等待时间</div>
+      </div>
     </div>
   );
 }

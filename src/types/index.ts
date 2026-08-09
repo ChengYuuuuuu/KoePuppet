@@ -53,6 +53,7 @@ export interface UIConfig {
   renderMode: RenderMode;
   mouthOffset: { x: number; y: number };
   bounceIntensity: number;
+  swayIntensity: number;
   lyricOffset: number;
   backgroundColor: string;
   blinkFrequency: number;
@@ -65,6 +66,11 @@ export interface BounceState {
   triggerTime: number;
   scaleX: number;
   scaleY: number;
+}
+
+export interface SwayState {
+  currentBeatIndex: number;
+  angle: number;
 }
 
 export interface AudioAnalyserData {
@@ -92,6 +98,7 @@ export const DEFAULT_UI_CONFIG: UIConfig = {
   renderMode: 'L3',
   mouthOffset: { ...DEFAULT_MOUTH_OFFSET },
   bounceIntensity: 0.6,
+  swayIntensity: 0.5,
   lyricOffset: 0,
   backgroundColor: '#1a1a2e',
   blinkFrequency: 30,

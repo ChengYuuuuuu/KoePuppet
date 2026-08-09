@@ -14,15 +14,24 @@ import {
 } from '../types/index';
 import { parseNeteaseSong } from '../utils/api';
 import { phonemesToMouthPoints } from '../utils/mouthMapper';
-import { getModelLoadState, subscribeModelLoadState, ensureModelsLoaded, testSofaInference, testSofaLongAlignment, analyzeSofaFile } from '../utils/streamingSofa';
+import { getModelLoadState, subscribeModelLoadState, ensureModelsLoaded, analyzeSofaFile } from '../utils/streamingSofa';
 import { getAnalysisState, subscribeAnalysisState, type AnalysisStage } from '../utils/client/analysisDiag';
 import { saveBaseImage, saveMouthImages, saveEyeImages } from '../utils/storage';
 import { renderFrame, getAssetCenter, getAssetSize, computeVisibleBounds, type VisibleBounds } from '../utils/renderer';
 import { parseLyricText } from '../utils/lyrics';
-import { AudioEngine } from '../utils/audio';
+import { AudioEngine, computeSway } from '../utils/audio';
 
 const HANDLE_RADIUS = 8;
 const ROTATE_RADIUS = 10;
+
+function findBeatIndex(t: number, beatTimes: number[]): number {
+  let idx = -1;
+  for (let i = 0; i < beatTimes.length; i++) {
+    if (beatTimes[i] <= t) idx = i;
+    else break;
+  }
+  return idx;
+}
 
 interface CanvasPreviewProps {
   assets: CharacterAssets;
@@ -30,6 +39,8 @@ interface CanvasPreviewProps {
   playbackState: PlaybackState;
   mouthShape: MouthShape;
   bounceScale: { scaleX: number; scaleY: number };
+  beatTimes: number[];
+  audioEngine: AudioEngine | null;
   baseImageLoaded: HTMLImageElement | null;
   mouthImagesLoaded: Record<string, HTMLImageElement | null>;
   eyeImagesLoaded: Record<string, HTMLImageElement | null>;
@@ -47,7 +58,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
   ref
 ) {
   const {
-    assets, config, playbackState, mouthShape, bounceScale,
+    assets, config, playbackState, mouthShape, bounceScale, beatTimes, audioEngine,
     baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded, isBlinking,
     transforms, editMode, selectedAsset, onSelectAsset, onEditTransform,
   } = props;
@@ -57,6 +68,8 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     playbackState: typeof playbackState;
     mouthShape: typeof mouthShape;
     bounceScale: typeof bounceScale;
+    beatTimes: number[];
+    audioEngine: AudioEngine | null;
     assets: typeof assets;
     config: typeof config;
     baseImageLoaded: typeof baseImageLoaded;
@@ -79,6 +92,8 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
   } | null>(null);
   const renderRequestedRef = useRef(false);
   const [renderTick, setRenderTick] = useState(0);
+  const swayRef = useRef<{ currentBeatIndex: number; angle: number }>({ currentBeatIndex: -1, angle: 0 });
+  const lastFrameNowRef = useRef(0);
 
   const itemIdRef = useRef(0);
   const prevLyricRef = useRef<LyricLine | null>(null);
@@ -159,7 +174,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
   }, [baseImageLoaded, mouthImagesLoaded]);
 
   useEffect(() => {
-    const shouldRender = playbackState.isPlaying || editMode;
+    const shouldRender = (playbackState.isPlaying || editMode) === true;
     if (shouldRender !== renderRequestedRef.current) {
       renderRequestedRef.current = shouldRender;
       if (shouldRender) setRenderTick(t => t + 1);
@@ -167,7 +182,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
   }, [playbackState.isPlaying, editMode]);
 
   animDataRef.current = {
-    playbackState, mouthShape, bounceScale, assets, config,
+    playbackState, mouthShape, bounceScale, beatTimes, audioEngine, assets, config,
     baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded, isBlinking,
     transforms, editMode, selectedAsset, onSelectAsset, onEditTransform,
     visibleBounds: visibleBoundsRef.current,
@@ -258,7 +273,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     }
 
     let animFrameId: number | null = null;
-    let lastDrawn = { w: -1, h: -1, mouthShape: '', scaleX: 0, scaleY: 0, isBlinking: false, lyric: null as LyricLine | null, energy: 0 };
+    let lastDrawn = { w: -1, h: -1, mouthShape: '', scaleX: 0, scaleY: 0, swayAngle: 0, isBlinking: false, lyric: null as LyricLine | null, energy: 0 };
 
     const frame = (now: number) => {
       if (!running) return;
@@ -284,10 +299,37 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
       }
 
       const b = d.bounceScale;
+
+      let dt = (now - lastFrameNowRef.current) / 1000;
+      if (lastFrameNowRef.current === 0) dt = 1 / 60;
+      lastFrameNowRef.current = now;
+      if (dt > 0.1) dt = 0.1;
+
+      let swayAngle = 0;
+      if (d.playbackState.isPlaying && !d.editMode) {
+        const t = d.audioEngine?.getCurrentTime() ?? d.playbackState.currentTime;
+        const bt = d.beatTimes;
+        const intensity = d.config.swayIntensity;
+        if (bt.length === 0 || intensity <= 0) {
+          swayRef.current = { currentBeatIndex: -1, angle: 0 };
+        } else {
+          let s = swayRef.current;
+          if (s.currentBeatIndex < 0) {
+            s = { currentBeatIndex: findBeatIndex(t, bt), angle: 0 };
+          }
+          s = computeSway(s, t, bt, intensity, dt);
+          swayRef.current = s;
+          swayAngle = s.angle;
+        }
+      } else if (swayRef.current.angle !== 0) {
+        swayRef.current = { currentBeatIndex: -1, angle: 0 };
+      }
+
       const dirty = resized || d.editMode
         || d.mouthShape !== lastDrawn.mouthShape
         || b.scaleX !== lastDrawn.scaleX
         || b.scaleY !== lastDrawn.scaleY
+        || swayAngle !== lastDrawn.swayAngle
         || d.isBlinking !== lastDrawn.isBlinking
         || currentLyric !== lastDrawn.lyric
         || lyricTransition < 1
@@ -299,6 +341,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
           mouthShape: d.mouthShape,
           scaleX: b.scaleX,
           scaleY: b.scaleY,
+          swayAngle,
           isBlinking: d.isBlinking,
           lyric: currentLyric,
           energy: d.playbackState.energy,
@@ -312,6 +355,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
           energy: d.playbackState.energy,
           mouthShape: d.mouthShape,
           bounceScale: d.bounceScale,
+          swayAngle,
           currentLyric,
           assets: d.assets,
           config: d.config,
@@ -881,6 +925,15 @@ export function RightPanel({
           <span className="val">{config.bounceIntensity.toFixed(1)}</span>
         </div>
         <div className="slider-row">
+          <label>摇摆</label>
+          <input
+            type="range" min="0" max="1.0" step="0.1"
+            value={config.swayIntensity}
+            onChange={(e) => onConfigChange({ swayIntensity: parseFloat(e.target.value) })}
+          />
+          <span className="val">{config.swayIntensity.toFixed(1)}</span>
+        </div>
+        <div className="slider-row">
           <label>歌词偏移</label>
           <input
             type="range" min="-500" max="500" step="50"
@@ -948,209 +1001,4 @@ export function RightPanel({
   );
 }
 
-interface DebugPanelProps {
-  show: boolean;
-  onClose: () => void;
-  bpm: number | null;
-  energy: number;
-  currentTime: number;
-  duration: number;
-  beatTimes: number[];
-  nextBeatIndex: number;
-  mouthShape: MouthShape;
-  bounceScale: { scaleX: number; scaleY: number };
-  energyHistoryRef: React.MutableRefObject<number[]>;
-  isPlaying: boolean;
-}
 
-export function DebugPanel({
-  show, onClose, bpm, energy, currentTime, duration,
-  beatTimes, nextBeatIndex, mouthShape, bounceScale, energyHistoryRef, isPlaying,
-}: DebugPanelProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const lastDrawRef = useRef(0);
-  const [testResult, setTestResult] = useState('');
-  const [testRunning, setTestRunning] = useState(false);
-  const [longResult, setLongResult] = useState('');
-  const [longRunning, setLongRunning] = useState(false);
-
-  const handleTestSofa = async () => {
-    setTestRunning(true);
-    setTestResult('运行中…（需先加载模型）');
-    try {
-      const r = await testSofaInference();
-      setTestResult(`OK: ${r.ms.toFixed(0)}ms，${r.frames} 帧`);
-    } catch (err: any) {
-      setTestResult(`失败: ${err?.message ?? String(err)}`);
-    } finally {
-      setTestRunning(false);
-    }
-  };
-
-  const handleTestLong = async () => {
-    setLongRunning(true);
-    setLongResult('运行中…');
-    try {
-      const r = await testSofaLongAlignment();
-      setLongResult(`OK: ${r.ms.toFixed(0)}ms 音素${r.phonemeCount} 均${r.meanDur.toFixed(3)}s >5s=${r.gt5} edge均=${r.edgeMean.toFixed(4)} <0.1=${(r.edgeLt01 * 100).toFixed(1)}% ${r.seq}`);
-    } catch (err: any) {
-      setLongResult(`失败: ${err?.message ?? String(err)}`);
-    } finally {
-      setLongRunning(false);
-    }
-  };
-
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const now = performance.now();
-    if (now - lastDrawRef.current < 60) return;
-    lastDrawRef.current = now;
-
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth * dpr;
-    const h = canvas.clientHeight * dpr;
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(dpr, dpr);
-    const W = canvas.clientWidth;
-    const H = canvas.clientHeight;
-
-    ctx.clearRect(0, 0, W, H);
-
-    ctx.fillStyle = '#0d1117';
-    ctx.fillRect(0, 0, W, H);
-
-    const windowSec = 5;
-    const tStart = Math.max(0, currentTime - windowSec);
-    const tEnd = currentTime + 0.5;
-
-    const toX = (t: number) => ((t - tStart) / (tEnd - tStart)) * W;
-
-    for (const bt of beatTimes) {
-      if (bt < tStart || bt > tEnd) continue;
-      const x = toX(bt);
-      const isNext = bt === beatTimes[nextBeatIndex];
-      ctx.fillStyle = isNext ? 'rgba(255,217,61,0.5)' : 'rgba(255,107,107,0.25)';
-      ctx.fillRect(x - 1, 0, 2, H);
-    }
-
-    const eh = energyHistoryRef.current;
-    if (eh.length > 1) {
-      ctx.beginPath();
-      ctx.strokeStyle = '#4A90D9';
-      ctx.lineWidth = 1.5;
-      const step = windowSec / eh.length;
-      for (let i = 0; i < eh.length; i++) {
-        const t = tStart + i * step;
-        const x = toX(t);
-        const norm = eh[i] / 255;
-        const y = H - 4 - norm * (H - 8);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-
-    const px = toX(currentTime);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(px, 0);
-    ctx.lineTo(px, H);
-    ctx.stroke();
-
-    ctx.fillStyle = '#fff';
-    ctx.font = '9px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(formatTime(currentTime), px, H - 2);
-  }, [currentTime, beatTimes, nextBeatIndex, energyHistoryRef]);
-
-  if (!show) return null;
-
-  const nextBeat = nextBeatIndex >= 0 && nextBeatIndex < beatTimes.length ? beatTimes[nextBeatIndex] : null;
-  const beatCount = beatTimes.length;
-
-  return (
-    <div style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0,
-      background: '#0d1117', color: '#c9d1d9',
-      fontFamily: 'monospace', fontSize: 11,
-      zIndex: 999, borderTop: '1px solid #30363d',
-      display: 'flex', flexDirection: 'column',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 16,
-        padding: '4px 12px', borderBottom: '1px solid #30363d',
-        background: '#161b22',
-      }}>
-        <span style={{ color: isPlaying ? '#3fb950' : '#8b949e' }}>
-          {isPlaying ? '▶ 播放中' : '⏸ 暂停'}
-        </span>
-        <span>BPM: <b style={{ color: '#ffa657' }}>{bpm?.toFixed(1) ?? '—'}</b></span>
-        <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
-        <span>节拍: {beatCount}</span>
-        <span style={{ marginLeft: 'auto', cursor: 'pointer', color: '#f88' }} onClick={onClose}>✕</span>
-      </div>
-
-      <div style={{ height: 80, position: 'relative' }}>
-        <canvas
-          ref={canvasRef}
-          style={{ width: '100%', height: '100%', display: 'block' }}
-        />
-      </div>
-
-      <div style={{
-        display: 'flex', gap: 16, padding: '3px 12px',
-        borderTop: '1px solid #30363d', color: '#8b949e',
-      }}>
-        <span>当前: <b style={{ color: '#c9d1d9' }}>{formatTime(currentTime)}</b></span>
-        <span>下一拍: <b style={{ color: nextBeat !== null ? '#ffd93d' : '#8b949e' }}>
-          {nextBeat !== null ? nextBeat.toFixed(2) + 's' : '—'}
-        </b></span>
-        <span>能量: <b style={{ color: '#4A90D9' }}>{Math.round(energy)}</b></span>
-        <span>口型: <b style={{ color: '#ff6b6b' }}>{mouthShape}</b></span>
-        <span>弹跳: <b style={{ color: bounceScale.scaleY < 0.98 ? '#3fb950' : '#8b949e' }}>
-          {bounceScale.scaleY < 0.98 ? '压缩' : '静止'}
-        </b></span>
-        <span>节拍索引: <b style={{ color: '#c9d1d9' }}>{nextBeatIndex}/{beatCount}</b></span>
-        <button
-          onClick={handleTestSofa}
-          disabled={testRunning}
-          style={{
-            background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d',
-            borderRadius: 4, padding: '1px 8px', cursor: 'pointer',
-            fontFamily: 'monospace', fontSize: 11,
-          }}
-        >
-          测试SOFA推理
-        </button>
-        <span style={{ color: testResult.startsWith('失败') ? '#f85149' : '#3fb950' }}>{testResult}</span>
-        <button
-          onClick={handleTestLong}
-          disabled={longRunning}
-          style={{
-            background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d',
-            borderRadius: 4, padding: '1px 8px', cursor: 'pointer',
-            fontFamily: 'monospace', fontSize: 11,
-          }}
-        >
-          测试长对齐
-        </button>
-        <span style={{ color: longResult.startsWith('失败') ? '#f85149' : '#ffa657' }}>{longResult}</span>
-      </div>
-    </div>
-  );
-}

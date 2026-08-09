@@ -1,6 +1,7 @@
 import {
   type AudioAnalyserData,
   type BounceState,
+  type SwayState,
 } from '../types/index';
 
 // ── AudioEngine ──
@@ -18,7 +19,7 @@ export class AudioEngine {
   private pauseOffset = 0;
   private duration = 0;
   private _loopTimer: ReturnType<typeof setInterval> | null = null;
-  private _frequencyData: Uint8Array | null = null;
+  private _frequencyData: Uint8Array<ArrayBuffer> | null = null;
   private onFrame: ((data: AudioAnalyserData, currentTime: number) => void) | null = null;
   private onEnded: (() => void) | null = null;
   private useElement = false;
@@ -382,4 +383,34 @@ export function updateBounce(
   }
 
   return state;
+}
+
+// ── Sway Engine (beat-driven, smooth ease toward alternating target) ──
+
+export function computeSway(
+  state: SwayState,
+  t: number,
+  beatTimes: number[],
+  intensity: number,
+  dt: number,
+): SwayState {
+  let { currentBeatIndex, angle } = state;
+
+  if (intensity <= 0 || beatTimes.length === 0) {
+    return { currentBeatIndex: -1, angle: 0 };
+  }
+
+  const next = currentBeatIndex + 1;
+  if (next < beatTimes.length && t >= beatTimes[next]) {
+    currentBeatIndex = next;
+  }
+
+  const dir = currentBeatIndex < 0 ? 0 : (currentBeatIndex % 2 === 0 ? -1 : 1);
+  const target = dir * 0.05 * (0.3 + intensity * 0.7);
+  const k = 6;
+  angle += (target - angle) * (1 - Math.exp(-dt * k));
+
+  if (currentBeatIndex < 0) angle = 0;
+
+  return { currentBeatIndex, angle };
 }

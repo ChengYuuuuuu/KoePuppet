@@ -19,6 +19,7 @@ export interface RenderContext {
   energy: number;
   mouthShape: MouthShape;
   bounceScale: { scaleX: number; scaleY: number };
+  swayAngle: number;
   currentLyric: LyricLine | null;
   assets: CharacterAssets;
   config: UIConfig;
@@ -35,6 +36,23 @@ export interface RenderContext {
 }
 
 const visibleBoundsCache = new WeakMap<HTMLImageElement, VisibleBounds>();
+
+const MAX_CHAR_DIM = 400;
+const TWIST_STRIPS = 20;
+const TWIST_OVERLAP = 2;
+const TWIST_FIXED_BOTTOM = 0.2;
+const CHAR_MARGIN = 150;
+
+let charOffscreen: HTMLCanvasElement | null = null;
+
+function getCharOffscreen(w: number, h: number): HTMLCanvasElement | null {
+  if (!charOffscreen || charOffscreen.width !== w || charOffscreen.height !== h) {
+    charOffscreen = document.createElement('canvas');
+    charOffscreen.width = w;
+    charOffscreen.height = h;
+  }
+  return charOffscreen;
+}
 
 export function computeVisibleBounds(img: HTMLImageElement): VisibleBounds {
   const cached = visibleBoundsCache.get(img);
@@ -84,18 +102,44 @@ function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: nu
 
 function drawCharacter(r: RenderContext): void {
   const { ctx, width, height } = r;
-  ctx.save();
+  const img = r.baseImageLoaded;
+  if (!img) return;
+
   const centerX = width * 0.25;
   const centerY = height / 2 - 40;
   const { scaleX, scaleY } = r.editMode ? { scaleX: 1, scaleY: 1 } : r.bounceScale;
 
-  const charH = r.baseImageLoaded ? r.baseImageLoaded.height : 200;
-  const bottomY = centerY + charH / 2;
+  let w = img.width;
+  let h = img.height;
+  if (w > MAX_CHAR_DIM || h > MAX_CHAR_DIM) {
+    const s = MAX_CHAR_DIM / Math.max(w, h);
+    w *= s;
+    h *= s;
+  }
+
+  const baseT = r.transforms.base ?? DEFAULT_TRANSFORM;
+  const bw = w * baseT.scale;
+  const bh = h * baseT.scale;
+  const osW = Math.ceil(bw + CHAR_MARGIN * 2);
+  const osH = Math.ceil(bh + CHAR_MARGIN * 2);
+  const os = getCharOffscreen(osW, osH);
+  if (!os) return;
+  const octx = os.getContext('2d');
+  if (!octx) return;
+
+  octx.clearRect(0, 0, osW, osH);
+  drawFlatCharacter(r, octx, osW, osH, w, h, baseT);
+
+  const baseCX = centerX + baseT.x;
+  const baseCY = centerY + baseT.y;
+  const bottomY = baseCY + bh / 2;
+
+  ctx.save();
   ctx.translate(centerX, bottomY);
   ctx.scale(scaleX, scaleY);
   ctx.translate(-centerX, -bottomY);
 
-  drawL3Character(r, centerX, centerY);
+  blitCharacter(r, os, osW, osH, baseCX, baseCY, bh);
 
   if (r.editMode && r.selectedAsset) {
     drawAssetOverlay(r, centerX, centerY);
@@ -104,38 +148,36 @@ function drawCharacter(r: RenderContext): void {
   ctx.restore();
 }
 
-function drawL3Character(r: RenderContext, cx: number, cy: number): void {
-  const { ctx } = r;
-  const img = r.baseImageLoaded;
-  if (!img) return;
+function drawFlatCharacter(
+  r: RenderContext,
+  octx: CanvasRenderingContext2D,
+  osW: number,
+  osH: number,
+  w: number,
+  h: number,
+  baseT: AssetTransform,
+): void {
+  const cx = osW / 2;
+  const cy = osH / 2;
+  const img = r.baseImageLoaded!;
 
-  const maxDim = 400;
-  let w = img.width;
-  let h = img.height;
-  if (w > maxDim || h > maxDim) {
-    const s = maxDim / Math.max(w, h);
-    w *= s;
-    h *= s;
-  }
-
-  const baseT = r.transforms.base ?? DEFAULT_TRANSFORM;
-  ctx.save();
-  ctx.translate(cx + baseT.x, cy + baseT.y);
-  ctx.rotate(baseT.rotation * Math.PI / 180);
-  ctx.scale(baseT.scale, baseT.scale);
-  ctx.drawImage(img, -w / 2, -h / 2, w, h);
-  ctx.restore();
+  octx.save();
+  octx.translate(cx, cy);
+  octx.rotate(baseT.rotation * Math.PI / 180);
+  octx.scale(baseT.scale, baseT.scale);
+  octx.drawImage(img, -w / 2, -h / 2, w, h);
+  octx.restore();
 
   // Blink overlay (same position/transform as base)
   if (r.isBlinking) {
     const blinkImg = r.eyeImagesLoaded.blink ?? null;
     if (blinkImg) {
-      ctx.save();
-      ctx.translate(cx + baseT.x, cy + baseT.y);
-      ctx.rotate(baseT.rotation * Math.PI / 180);
-      ctx.scale(baseT.scale, baseT.scale);
-      ctx.drawImage(blinkImg, -w / 2, -h / 2, w, h);
-      ctx.restore();
+      octx.save();
+      octx.translate(cx, cy);
+      octx.rotate(baseT.rotation * Math.PI / 180);
+      octx.scale(baseT.scale, baseT.scale);
+      octx.drawImage(blinkImg, -w / 2, -h / 2, w, h);
+      octx.restore();
     }
   }
 
@@ -147,11 +189,58 @@ function drawL3Character(r: RenderContext, cx: number, cy: number): void {
     const mouthT = r.transforms.mouth ?? DEFAULT_TRANSFORM;
     const mouthCx = cx + r.config.mouthOffset.x;
     const mouthCy = cy + r.config.mouthOffset.y;
+    octx.save();
+    octx.translate(mouthCx + mouthT.x, mouthCy + mouthT.y);
+    octx.rotate(mouthT.rotation * Math.PI / 180);
+    octx.scale(mouthT.scale, mouthT.scale);
+    octx.drawImage(mouthImg, -mw / 2, -mh / 2, mw, mh);
+    octx.restore();
+  }
+}
+
+function blitCharacter(
+  r: RenderContext,
+  os: HTMLCanvasElement,
+  osW: number,
+  osH: number,
+  baseCX: number,
+  baseCY: number,
+  bh: number,
+): void {
+  const { ctx } = r;
+  const topLeftX = baseCX - osW / 2;
+  const topLeftY = baseCY - osH / 2;
+
+  if (r.editMode || r.swayAngle === 0) {
+    ctx.drawImage(os, topLeftX, topLeftY, osW, osH);
+    return;
+  }
+
+  const baseTopY = baseCY - bh / 2;
+  const baseBottomY = baseCY + bh / 2;
+  const pivotY = baseBottomY - TWIST_FIXED_BOTTOM * bh;
+
+  const osTop = osH / 2 - bh / 2;
+  const osPivot = osH / 2 + 0.3 * bh;
+
+  // Bottom 20% stays fixed
+  ctx.drawImage(os, 0, osPivot, osW, osH - osPivot, topLeftX, topLeftY + osPivot, osW, osH - osPivot);
+
+  // Top 80% progressive twist
+  const topH = osPivot - osTop;
+  if (topH <= 0) return;
+  const stripH = topH / TWIST_STRIPS;
+  for (let i = 0; i < TWIST_STRIPS; i++) {
+    const srcY0 = osTop + i * stripH;
+    const srcH = stripH + (i < TWIST_STRIPS - 1 ? TWIST_OVERLAP : 0);
+    const stripCenterScreenY = baseCY + (srcY0 + stripH / 2 - osH / 2);
+    const progress = Math.max(0, Math.min(1, (stripCenterScreenY - pivotY) / (baseTopY - pivotY)));
+    const rot = r.swayAngle * progress;
     ctx.save();
-    ctx.translate(mouthCx + mouthT.x, mouthCy + mouthT.y);
-    ctx.rotate(mouthT.rotation * Math.PI / 180);
-    ctx.scale(mouthT.scale, mouthT.scale);
-    ctx.drawImage(mouthImg, -mw / 2, -mh / 2, mw, mh);
+    ctx.translate(0, pivotY);
+    ctx.rotate(rot);
+    ctx.translate(0, -pivotY);
+    ctx.drawImage(os, 0, srcY0, osW, srcH, topLeftX, topLeftY + srcY0, osW, srcH);
     ctx.restore();
   }
 }

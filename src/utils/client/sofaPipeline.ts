@@ -1,4 +1,3 @@
-import type { SofaPhoneme } from '../sofa';
 import type { ChunkEvent, StreamingCallbacks } from '../streamingSofa';
 import { downloadAndDecodeAudio, audioBufferToFloat32 } from './audioDecoder';
 import { loadSofaModel, runSofaInference, SOFA_MODEL_SIZE, DEMUCS_MODEL_SIZE } from './onnxLoader';
