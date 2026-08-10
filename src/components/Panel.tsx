@@ -10,13 +10,14 @@ import {
   type MouthPoint,
   type AssetTransform,
   type TimeRange,
+  type LyricAssignment,
   DEFAULT_TRANSFORM,
 } from '../types/index';
 import { parseNeteaseSong } from '../utils/api';
 import { phonemesToMouthPoints } from '../utils/mouthMapper';
 import { getModelLoadState, subscribeModelLoadState, ensureModelsLoaded, analyzeSofaFile } from '../utils/streamingSofa';
 import { getAnalysisState, subscribeAnalysisState, type AnalysisStage } from '../utils/client/analysisDiag';
-import { saveBaseImage, saveMouthImages, saveEyeImages } from '../utils/storage';
+import { saveBaseImage, saveMouthImages, saveEyeImages, saveBaseImage2, saveMouthImages2, saveEyeImages2 } from '../utils/storage';
 import { renderFrame, getAssetCenter, getAssetSize, computeVisibleBounds, type VisibleBounds } from '../utils/renderer';
 import { parseLyricText } from '../utils/lyrics';
 import { AudioEngine, computeSway } from '../utils/audio';
@@ -48,6 +49,10 @@ interface CanvasPreviewProps {
   baseImageLoaded: HTMLImageElement | null;
   mouthImagesLoaded: Record<string, HTMLImageElement | null>;
   eyeImagesLoaded: Record<string, HTMLImageElement | null>;
+  assets2: CharacterAssets;
+  baseImageLoaded2: HTMLImageElement | null;
+  mouthImagesLoaded2: Record<string, HTMLImageElement | null>;
+  eyeImagesLoaded2: Record<string, HTMLImageElement | null>;
   isBlinking: boolean;
   onMouthOffsetChange?: (offset: { x: number; y: number }) => void;
   transforms?: Record<string, AssetTransform>;
@@ -55,6 +60,7 @@ interface CanvasPreviewProps {
   selectedAsset?: string | null;
   onSelectAsset?: (key: string | null) => void;
   onEditTransform?: (key: string, t: AssetTransform) => void;
+  charAssignments?: Record<string, LyricAssignment>;
 }
 
 export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(function CanvasPreview(
@@ -63,8 +69,9 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
 ) {
   const {
     assets, config, playbackState, mouthShape, bounceScale, beatTimes, audioEngine,
-    baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded, isBlinking,
-    transforms, editMode, selectedAsset, onSelectAsset, onEditTransform,
+    baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded,
+    assets2, baseImageLoaded2, mouthImagesLoaded2, eyeImagesLoaded2, isBlinking,
+    transforms, editMode, selectedAsset, onSelectAsset, onEditTransform, charAssignments,
   } = props;
   const editInteraction = useRef<{ type: 'move' | 'resize' | 'rotate'; startX: number; startY: number; cx: number; cy: number; startT: AssetTransform } | null>(null);
   const visibleBoundsRef = useRef<Record<string, VisibleBounds>>({});
@@ -79,12 +86,17 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     baseImageLoaded: typeof baseImageLoaded;
     mouthImagesLoaded: typeof mouthImagesLoaded;
     eyeImagesLoaded: typeof eyeImagesLoaded;
+    assets2: typeof assets2;
+    baseImageLoaded2: typeof baseImageLoaded2;
+    mouthImagesLoaded2: typeof mouthImagesLoaded2;
+    eyeImagesLoaded2: typeof eyeImagesLoaded2;
     isBlinking: typeof isBlinking;
     transforms: typeof transforms;
     editMode: typeof editMode;
     selectedAsset: typeof selectedAsset;
     onSelectAsset: typeof onSelectAsset;
     onEditTransform: typeof onEditTransform;
+    charAssignments: typeof charAssignments;
     visibleBounds: Record<string, VisibleBounds>;
   });
 
@@ -107,6 +119,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     translation: string;
     level: number;
     entering: boolean;
+    assignment: LyricAssignment;
   }>>([]);
 
   useEffect(() => {
@@ -116,12 +129,13 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
 
     const { original, translation } = parseLyricText(current.text);
     const id = ++itemIdRef.current;
+    const assignment = charAssignments?.[String(current.time)] ?? 'both';
 
     setLyricItems(prev => {
       const updated = prev
         .map(item => ({ ...item, level: item.level + 1 }))
         .filter(item => item.level <= 4);
-      return [...updated, { id, original, translation, level: 0, entering: true }];
+      return [...updated, { id, original, translation, level: 0, entering: true, assignment }];
     });
 
     requestAnimationFrame(() => {
@@ -129,7 +143,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
         prev.map(item => item.id === id ? { ...item, entering: false } : item)
       );
     });
-  }, [playbackState.currentLyric]);
+  }, [playbackState.currentLyric, charAssignments]);
 
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const [bottoms, setBottoms] = useState<Record<number, number>>({});
@@ -171,11 +185,21 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
       }
     }
 
+    if (baseImageLoaded2) {
+      newBounds.c2base = computeVisibleBounds(baseImageLoaded2);
+    }
+
+    for (const [k, img] of Object.entries(mouthImagesLoaded2)) {
+      if (img) {
+        newBounds['c2' + k] = computeVisibleBounds(img);
+      }
+    }
+
     visibleBoundsRef.current = {
       ...visibleBoundsRef.current,
       ...newBounds,
     };
-  }, [baseImageLoaded, mouthImagesLoaded]);
+  }, [baseImageLoaded, mouthImagesLoaded, baseImageLoaded2, mouthImagesLoaded2]);
 
   useEffect(() => {
     const shouldRender = (playbackState.isPlaying || editMode) === true;
@@ -187,8 +211,10 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
 
   animDataRef.current = {
     playbackState, mouthShape, bounceScale, beatTimes, audioEngine, assets, config,
-    baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded, isBlinking,
+    baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded,
+    assets2, baseImageLoaded2, mouthImagesLoaded2, eyeImagesLoaded2, isBlinking,
     transforms, editMode, selectedAsset, onSelectAsset, onEditTransform,
+    charAssignments,
     visibleBounds: visibleBoundsRef.current,
   };
 
@@ -217,11 +243,14 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     }
 
     function hitTestAsset(mx: number, my: number, key: string, d: typeof animDataRef.current, cw: number, ch: number): boolean {
-      const center = getCanvasCenter(cw, ch);
+      const isC2 = key.startsWith('c2');
+      const center = isC2 ? { cx: cw * 0.75, cy: ch / 2 - 40 } : getCanvasCenter(cw, ch);
       const vb = d.visibleBounds;
-      const size = getAssetSize(key, d.baseImageLoaded, d.mouthImagesLoaded, d.transforms ?? {}, vb);
+      const baseImage = isC2 ? d.baseImageLoaded2 : d.baseImageLoaded;
+      const mouthImages = isC2 ? d.mouthImagesLoaded2 : d.mouthImagesLoaded;
+      const size = getAssetSize(key, baseImage, mouthImages, d.transforms ?? {}, vb);
       if (size.w === 0 || size.h === 0) return false;
-      const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {}, vb, d.baseImageLoaded);
+      const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {}, vb, baseImage);
       const t = d.transforms?.[key] ?? DEFAULT_TRANSFORM;
       const angle = t.rotation * Math.PI / 180;
       const cos = Math.cos(angle);
@@ -235,11 +264,14 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     }
 
     function getHandles(key: string, d: typeof animDataRef.current, cw: number, ch: number): { x: number; y: number; type: 'corner' | 'mid' | 'rotate' }[] | null {
-      const center = getCanvasCenter(cw, ch);
+      const isC2 = key.startsWith('c2');
+      const center = isC2 ? { cx: cw * 0.75, cy: ch / 2 - 40 } : getCanvasCenter(cw, ch);
       const vb = d.visibleBounds;
-      const size = getAssetSize(key, d.baseImageLoaded, d.mouthImagesLoaded, d.transforms ?? {}, vb);
+      const baseImage = isC2 ? d.baseImageLoaded2 : d.baseImageLoaded;
+      const mouthImages = isC2 ? d.mouthImagesLoaded2 : d.mouthImagesLoaded;
+      const size = getAssetSize(key, baseImage, mouthImages, d.transforms ?? {}, vb);
       if (size.w === 0 || size.h === 0) return null;
-      const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {}, vb, d.baseImageLoaded);
+      const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {}, vb, baseImage);
       const t = d.transforms?.[key] ?? DEFAULT_TRANSFORM;
       const angle = t.rotation * Math.PI / 180;
       const cos = Math.cos(angle);
@@ -369,12 +401,17 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
           eyeImagesLoaded: d.eyeImagesLoaded,
           isBlinking: d.isBlinking,
           baseImageLoaded: d.baseImageLoaded,
+          assets2: d.assets2,
+          baseImageLoaded2: d.baseImageLoaded2,
+          mouthImagesLoaded2: d.mouthImagesLoaded2,
+          eyeImagesLoaded2: d.eyeImagesLoaded2,
           prevLyric: null,
           lyricTransition,
           transforms: d.transforms ?? {},
           editMode: d.editMode ?? false,
           selectedAsset: d.selectedAsset ?? null,
           visibleBounds: d.visibleBounds,
+          charAssignments: d.charAssignments,
         };
         renderFrame(rc);
         ctx.resetTransform();
@@ -400,7 +437,8 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
         e.preventDefault();
         const mx = e.clientX - rect2.left;
         const my = e.clientY - rect2.top;
-        const center = getCanvasCenter(rect2.width, rect2.height);
+        const c1center = getCanvasCenter(rect2.width, rect2.height);
+        const c2center = { cx: rect2.width * 0.75, cy: rect2.height / 2 - 40 };
 
         // Check handles of currently selected asset (skip for lyric since it uses HTML handles)
         if (d.selectedAsset && d.selectedAsset !== 'lyric' && d.onEditTransform) {
@@ -408,9 +446,11 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
           if (handles) {
             const hit = getHitHandle(mx, my, handles);
             if (hit) {
+              const selIsC2 = d.selectedAsset.startsWith('c2');
+              const selCenter = selIsC2 ? c2center : c1center;
               const currentT = d.transforms?.[d.selectedAsset] ?? { ...DEFAULT_TRANSFORM };
               const vb = d.visibleBounds;
-              const assetCenter = getAssetCenter(d.selectedAsset, center.cx, center.cy, d.config, d.transforms ?? {}, vb, d.baseImageLoaded);
+              const assetCenter = getAssetCenter(d.selectedAsset, selCenter.cx, selCenter.cy, d.config, d.transforms ?? {}, vb, selIsC2 ? d.baseImageLoaded2 : d.baseImageLoaded);
               if (hit.type === 'rotate') {
                 editInteraction.current = { type: 'rotate', startX: mx, startY: my, cx: assetCenter.x, cy: assetCenter.y, startT: { ...currentT } };
                 canvas.style.cursor = 'crosshair';
@@ -424,14 +464,21 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
           }
         }
 
-        // Check asset bodies
-        const assetKeys = d.baseImageLoaded ? ['mouth', 'base'] : [];
-        for (const key of assetKeys) {
+        // Check asset bodies of both characters
+        const assetKeys: Array<{ key: string; cx: number; cy: number }> = [];
+        if (d.baseImageLoaded) {
+          assetKeys.push({ key: 'mouth', cx: c1center.cx, cy: c1center.cy }, { key: 'base', cx: c1center.cx, cy: c1center.cy });
+        }
+        if (d.baseImageLoaded2) {
+          assetKeys.push({ key: 'c2mouth', cx: c2center.cx, cy: c2center.cy }, { key: 'c2base', cx: c2center.cx, cy: c2center.cy });
+        }
+        for (const entry of assetKeys) {
+          const key = entry.key;
           if (hitTestAsset(mx, my, key, d, rect2.width, rect2.height)) {
             d.onSelectAsset?.(key);
             const currentT = d.transforms?.[key] ?? { ...DEFAULT_TRANSFORM };
             const vb = d.visibleBounds;
-            const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {}, vb, d.baseImageLoaded);
+            const assetCenter = getAssetCenter(key, entry.cx, entry.cy, d.config, d.transforms ?? {}, vb, key.startsWith('c2') ? d.baseImageLoaded2 : d.baseImageLoaded);
             editInteraction.current = { type: 'move', startX: mx, startY: my, cx: assetCenter.x, cy: assetCenter.y, startT: { ...currentT } };
             canvas.style.cursor = 'grabbing';
             try { canvas.setPointerCapture(e.pointerId); } catch {}
@@ -605,9 +652,10 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
             <div
               key={item.id}
               ref={el => { if (el) itemRefs.current.set(item.id, el); }}
-              className={`lyric-item level-${item.level}${item.entering ? ' entering' : ''}`}
+              className={`lyric-item level-${item.level}${item.entering ? ' entering' : ''} lyric-char-${item.assignment}`}
               style={{ bottom: bottoms[item.id] ?? 0 }}
             >
+              <span className="lyric-pointer-right" />
               <div className="lyric-original">{item.original}</div>
               {item.translation && <div className="lyric-translated">{item.translation}</div>}
             </div>
@@ -626,6 +674,8 @@ interface RightPanelProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   assets: CharacterAssets;
   onAssetsChange: (assets: CharacterAssets) => void;
+  assets2: CharacterAssets;
+  onAssetsChange2: (assets: CharacterAssets) => void;
   onSongLoad: (data: { title: string; artist: string; coverUrl: string; audioUrl: string; lyrics: string }) => void;
   onLyricsLoad: (lrcText: string) => void;
   onSeek: (time: number) => void;
@@ -635,6 +685,9 @@ interface RightPanelProps {
   analyzing?: boolean;
   editMode?: boolean;
   processedRanges: TimeRange[];
+  lyricsList?: LyricLine[];
+  charAssignments?: Record<string, LyricAssignment>;
+  onAssignLyrics?: (assignments: Record<string, LyricAssignment>) => void;
 }
 
 const MOUTH_KEYS: (keyof MouthImages)[] = ['closed', 'A', 'E', 'I', 'O', 'U'];
@@ -654,6 +707,8 @@ export function RightPanel({
   onConfigChange,
   assets,
   onAssetsChange,
+  assets2,
+  onAssetsChange2,
   onSongLoad,
   onLyricsLoad,
   onSeek,
@@ -663,11 +718,16 @@ export function RightPanel({
   analyzing,
   editMode,
   processedRanges,
+  lyricsList,
+  charAssignments,
+  onAssignLyrics,
 }: RightPanelProps) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dragTime, setDragTime] = useState<number | null>(null);
+  const [activeChar, setActiveChar] = useState<1 | 2>(1);
+  const [showAssigner, setShowAssigner] = useState(false);
   const modelLoadState = useSyncExternalStore(subscribeModelLoadState, getModelLoadState);
   const analysisState = useSyncExternalStore(subscribeAnalysisState, getAnalysisState);
 
@@ -709,50 +769,67 @@ export function RightPanel({
   }, [audioEngine, dragTime, onSeek]);
 
   const handleBaseImageUpload = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (char: 1 | 2) => (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
-        await saveBaseImage(dataUrl);
-        onAssetsChange({ ...assets, baseImage: dataUrl });
+        if (char === 2) {
+          await saveBaseImage2(dataUrl);
+          onAssetsChange2({ ...assets2, baseImage: dataUrl });
+        } else {
+          await saveBaseImage(dataUrl);
+          onAssetsChange({ ...assets, baseImage: dataUrl });
+        }
       };
       reader.readAsDataURL(file);
     },
-    [assets, onAssetsChange]
+    [assets, onAssetsChange, assets2, onAssetsChange2]
   );
 
   const handleMouthUpload = useCallback(
-    (key: keyof MouthImages) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    (char: 1 | 2, key: keyof MouthImages) => (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
-        const newMouthImages = { ...assets.mouthImages, [key]: dataUrl };
-        await saveMouthImages(newMouthImages);
-        onAssetsChange({ ...assets, mouthImages: newMouthImages });
+        if (char === 2) {
+          const newMouthImages = { ...assets2.mouthImages, [key]: dataUrl };
+          await saveMouthImages2(newMouthImages);
+          onAssetsChange2({ ...assets2, mouthImages: newMouthImages });
+        } else {
+          const newMouthImages = { ...assets.mouthImages, [key]: dataUrl };
+          await saveMouthImages(newMouthImages);
+          onAssetsChange({ ...assets, mouthImages: newMouthImages });
+        }
       };
       reader.readAsDataURL(file);
     },
-    [assets, onAssetsChange]
+    [assets, onAssetsChange, assets2, onAssetsChange2]
   );
 
   const handleEyeUpload = useCallback(
-    (key: keyof EyeImages) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    (char: 1 | 2, key: keyof EyeImages) => (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
-        const newEyeImages = { ...assets.eyeImages, [key]: dataUrl };
-        await saveEyeImages(newEyeImages);
-        onAssetsChange({ ...assets, eyeImages: newEyeImages });
+        if (char === 2) {
+          const newEyeImages = { ...assets2.eyeImages, [key]: dataUrl };
+          await saveEyeImages2(newEyeImages);
+          onAssetsChange2({ ...assets2, eyeImages: newEyeImages });
+        } else {
+          const newEyeImages = { ...assets.eyeImages, [key]: dataUrl };
+          await saveEyeImages(newEyeImages);
+          onAssetsChange({ ...assets, eyeImages: newEyeImages });
+        }
       };
       reader.readAsDataURL(file);
     },
-    [assets, onAssetsChange]
+    [assets, onAssetsChange, assets2, onAssetsChange2]
   );
 
   const [fileAnalyzing, setFileAnalyzing] = useState(false);
@@ -792,6 +869,17 @@ export function RightPanel({
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
+
+  const cycleAssignment = useCallback(
+    (time: number) => {
+      if (!onAssignLyrics) return;
+      const key = String(time);
+      const current: LyricAssignment = charAssignments?.[key] ?? 'both';
+      const next: LyricAssignment = current === 'both' ? '1' : current === '1' ? '2' : 'both';
+      onAssignLyrics({ ...(charAssignments ?? {}), [key]: next });
+    },
+    [charAssignments, onAssignLyrics]
+  );
 
   return (
     <div className="right-panel">
@@ -980,24 +1068,90 @@ export function RightPanel({
       </div>
 
       <div className="asset-section">
-        <div className="label">角色素材</div>
-        <div className="asset-btns">
-          <label className={`asset-btn ${assets.baseImage ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
-            {assets.baseImage ? '底图 ✓' : '角色底图'}
-            <input type="file" accept="image/png,image/jpeg" onChange={handleBaseImageUpload} disabled={editMode} />
-          </label>
-          {MOUTH_KEYS.map((key) => (
-              <label key={key} className={`asset-btn ${assets.mouthImages[key] ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
-                {assets.mouthImages[key] ? `${key} ✓` : key}
-                <input type="file" accept="image/png" onChange={handleMouthUpload(key)} disabled={editMode} />
-              </label>
-            ))}
-          <label className={`asset-btn ${assets.eyeImages.blink ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
-            {assets.eyeImages.blink ? '闭眼图 ✓' : '闭眼图'}
-            <input type="file" accept="image/png" onChange={handleEyeUpload('blink')} disabled={editMode} />
-          </label>
-          </div>
+        <div className="label">角色</div>
+        <div className="char-selector">
+          <button
+            className={`char-tab${activeChar === 1 ? ' active' : ''}`}
+            onClick={() => setActiveChar(1)}
+          >
+            角色1
+          </button>
+          <button
+            className={`char-tab${!assets2.baseImage ? ' disabled' : ''}${activeChar === 2 ? ' active' : ''}`}
+            onClick={() => setActiveChar(2)}
+          >
+            角色2
+          </button>
         </div>
+        {activeChar === 2 && !assets2.baseImage && (
+          <div className="char-hint">角色2 未导入底图，上传底图后激活</div>
+        )}
+      </div>
+
+      <div className="asset-section">
+        <div className="label">角色素材 · 角色{activeChar}</div>
+        <div className="asset-btns">
+          {activeChar === 1 ? (
+            <>
+              <label className={`asset-btn ${assets.baseImage ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
+                {assets.baseImage ? '底图 ✓' : '角色底图'}
+                <input type="file" accept="image/png,image/jpeg" onChange={handleBaseImageUpload(1)} disabled={editMode} />
+              </label>
+              {MOUTH_KEYS.map((key) => (
+                <label key={key} className={`asset-btn ${assets.mouthImages[key] ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
+                  {assets.mouthImages[key] ? `${key} ✓` : key}
+                  <input type="file" accept="image/png" onChange={handleMouthUpload(1, key)} disabled={editMode} />
+                </label>
+              ))}
+              <label className={`asset-btn ${assets.eyeImages.blink ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
+                {assets.eyeImages.blink ? '闭眼图 ✓' : '闭眼图'}
+                <input type="file" accept="image/png" onChange={handleEyeUpload(1, 'blink')} disabled={editMode} />
+              </label>
+            </>
+          ) : (
+            <>
+              <label className={`asset-btn ${assets2.baseImage ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
+                {assets2.baseImage ? '底图 ✓' : '角色底图'}
+                <input type="file" accept="image/png,image/jpeg" onChange={handleBaseImageUpload(2)} disabled={editMode} />
+              </label>
+              {MOUTH_KEYS.map((key) => (
+                <label key={key} className={`asset-btn ${assets2.mouthImages[key] ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
+                  {assets2.mouthImages[key] ? `${key} ✓` : key}
+                  <input type="file" accept="image/png" onChange={handleMouthUpload(2, key)} disabled={editMode} />
+                </label>
+              ))}
+              <label className={`asset-btn ${assets2.eyeImages.blink ? 'uploaded' : ''}`} style={editMode ? { opacity: 0.4, pointerEvents: 'none' } : {}}>
+                {assets2.eyeImages.blink ? '闭眼图 ✓' : '闭眼图'}
+                <input type="file" accept="image/png" onChange={handleEyeUpload(2, 'blink')} disabled={editMode} />
+              </label>
+              {assets2.baseImage && (
+                <button
+                  className="char-remove-btn"
+                  onClick={() => onAssetsChange2({ baseImage: null, mouthImages: { A: null, E: null, I: null, O: null, U: null, closed: null }, eyeImages: { blink: null } })}
+                >
+                  移除角色2
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="asset-section">
+        <div className="label">歌词分配</div>
+        <div className="asset-btns">
+          <button
+            className="asset-btn"
+            disabled={!lyricsList || lyricsList.length === 0}
+            onClick={() => setShowAssigner(true)}
+          >
+            分配歌词
+          </button>
+        </div>
+        {(!lyricsList || lyricsList.length === 0) && (
+          <div className="char-hint">请先解析歌曲以加载歌词</div>
+        )}
+      </div>
 
       <div className="asset-section">
         <div className="label">上传音频测试</div>
@@ -1012,6 +1166,42 @@ export function RightPanel({
           </label>
         </div>
       </div>
+
+      {showAssigner && (
+        <div className="assigner-overlay" onClick={() => setShowAssigner(false)}>
+          <div className="assigner-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="assigner-header">分配歌词</div>
+            <div className="assigner-legend">
+              <span className="legend-item legend-1">角色1</span>
+              <span className="legend-item legend-2">角色2</span>
+              <span className="legend-item legend-both">合唱</span>
+              <span className="legend-tip">点击歌词行循环切换</span>
+            </div>
+            <div className="assigner-list">
+              {lyricsList?.map((line, i) => {
+                const assignment: LyricAssignment = charAssignments?.[String(line.time)] ?? 'both';
+                const { original, translation } = parseLyricText(line.text);
+                return (
+                  <div
+                    key={`${i}-${line.time}`}
+                    className={`assigner-row assigner-${assignment}`}
+                    onClick={() => cycleAssignment(line.time)}
+                  >
+                    <span className="assigner-time">{formatTime(line.time)}</span>
+                    <div className="assigner-text">
+                      <div className="assigner-original">{original}</div>
+                      {translation && <div className="assigner-translated">{translation}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button className="assigner-confirm" onClick={() => setShowAssigner(false)}>
+              确定
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

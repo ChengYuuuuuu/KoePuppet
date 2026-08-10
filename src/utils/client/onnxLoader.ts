@@ -15,11 +15,41 @@ export const DEMUCS_MODEL_SIZE = 87695109;
 let sofaSession: ort.InferenceSession | null = null;
 let demucsSession: ort.InferenceSession | null = null;
 
+const MODEL_CACHE_NAME = 'lip-sync-models-v1';
+
+if (typeof navigator !== 'undefined' && typeof navigator.storage?.persist === 'function') {
+  navigator.storage.persist().catch(() => {});
+}
+
+async function getModelCache(): Promise<Cache | null> {
+  try {
+    if (typeof caches === 'undefined') return null;
+    return await caches.open(MODEL_CACHE_NAME);
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchWithProgress(
   url: string,
   onProgress?: (loaded: number, total: number) => void,
   fallbackTotal?: number,
 ): Promise<ArrayBuffer> {
+  const cache = await getModelCache();
+  if (cache) {
+    try {
+      const cached = await cache.match(url);
+      if (cached) {
+        const buf = await cached.arrayBuffer();
+        const t = fallbackTotal || 1;
+        onProgress?.(t, t);
+        return buf;
+      }
+    } catch {
+      // 缓存读取失败时回退到网络下载
+    }
+  }
+
   const res = await fetch(url);
   if (!res.ok) throw new Error(`模型下载失败: ${res.status} ${res.statusText}`);
   const total = Number(res.headers.get('Content-Length')) || fallbackTotal || 0;
@@ -28,6 +58,13 @@ export async function fetchWithProgress(
   if (!reader) {
     const buf = await res.arrayBuffer();
     if (total > 0) onProgress?.(buf.byteLength, total);
+    if (cache) {
+      try {
+        await cache.put(url, new Response(buf, { headers: { 'Content-Type': 'application/octet-stream' } }));
+      } catch {
+        // 缓存写入失败（如配额不足）不影响本次加载
+      }
+    }
     return buf;
   }
 
@@ -61,6 +98,15 @@ export async function fetchWithProgress(
     out.set(c, offset);
     offset += c.byteLength;
   }
+
+  if (cache) {
+    try {
+      await cache.put(url, new Response(out.buffer, { headers: { 'Content-Type': 'application/octet-stream' } }));
+    } catch {
+      // 缓存写入失败不影响本次加载
+    }
+  }
+
   return out.buffer;
 }
 

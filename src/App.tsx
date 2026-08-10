@@ -3,7 +3,7 @@ import { CanvasPreview, RightPanel } from './components/Panel';
 import { AudioEngine, updateBounce } from './utils/audio';
 import { parseLRC, getCurrentLyric } from './utils/api';
 import { loadImage } from './utils/renderer';
-import { saveUIConfig, loadUIConfig, loadBaseImage, loadMouthImages, loadAssetTransforms, saveAssetTransforms, loadEyeImages } from './utils/storage';
+import { saveUIConfig, loadUIConfig, loadBaseImage, loadMouthImages, loadAssetTransforms, saveAssetTransforms, loadEyeImages, loadBaseImage2, loadMouthImages2, loadEyeImages2 } from './utils/storage';
 import { analyzeSofaUrlChunked } from './utils/streamingSofa';
 import { phonemesToMouthPoints } from './utils/mouthMapper';
 import {
@@ -18,6 +18,7 @@ import {
   type AssetTransform,
   type EyeImages,
   type TimeRange,
+  type LyricAssignment,
 } from './types/index';
 import './styles/app.css';
 
@@ -55,6 +56,12 @@ export default function App() {
     mouthImages: { ...defaultAssets.mouthImages },
   }));
 
+  const [assets2, setAssets2] = useState<CharacterAssets>({
+    baseImage: null,
+    mouthImages: { A: null, E: null, I: null, O: null, U: null, closed: null },
+    eyeImages: { blink: null },
+  });
+
   const [playbackState, setPlaybackState] = useState<PlaybackState>({
     isPlaying: false,
     currentTime: 0,
@@ -65,6 +72,8 @@ export default function App() {
   });
 
   const [songInfo, setSongInfo] = useState<{ title: string; artist: string; coverUrl: string } | null>(null);
+  const [lyricsList, setLyricsList] = useState<LyricLine[]>([]);
+  const [charAssignments, setCharAssignments] = useState<Record<string, LyricAssignment>>({});
   const [mouthShape, setMouthShape] = useState<MouthShape>('closed');
   const [bounceScale, setBounceScale] = useState({ scaleX: 1, scaleY: 1 });
   const [beatTimes, setBeatTimes] = useState<number[]>([]);
@@ -104,6 +113,9 @@ export default function App() {
   const [eyeImagesLoaded, setEyeImagesLoaded] = useState<Record<string, HTMLImageElement | null>>({});
   const [isBlinking, setIsBlinking] = useState(false);
   const [mouthImagesLoaded, setMouthImagesLoaded] = useState<Record<string, HTMLImageElement | null>>({});
+  const [baseImageLoaded2, setBaseImageLoaded2] = useState<HTMLImageElement | null>(null);
+  const [eyeImagesLoaded2, setEyeImagesLoaded2] = useState<Record<string, HTMLImageElement | null>>({});
+  const [mouthImagesLoaded2, setMouthImagesLoaded2] = useState<Record<string, HTMLImageElement | null>>({});
 
   useEffect(() => {
     if (assets.baseImage) {
@@ -140,6 +152,42 @@ export default function App() {
     };
     loadAll();
   }, [assets.eyeImages]);
+
+  useEffect(() => {
+    if (assets2.baseImage) {
+      loadImage(assets2.baseImage).then(setBaseImageLoaded2).catch(() => setBaseImageLoaded2(null));
+    } else {
+      setBaseImageLoaded2(null);
+    }
+  }, [assets2.baseImage]);
+
+  useEffect(() => {
+    const loadAll = async () => {
+      const loaded: Record<string, HTMLImageElement | null> = {};
+      for (const key of ['A', 'E', 'I', 'O', 'U', 'closed'] as const) {
+        const src = assets2.mouthImages[key];
+        if (src) {
+          try { loaded[key] = await loadImage(src); } catch { loaded[key] = null; }
+        } else { loaded[key] = null; }
+      }
+      setMouthImagesLoaded2(loaded);
+    };
+    loadAll();
+  }, [assets2.mouthImages]);
+
+  useEffect(() => {
+    const loadAll = async () => {
+      const loaded: Record<string, HTMLImageElement | null> = {};
+      for (const key of ['blink'] as const) {
+        const src = assets2.eyeImages[key];
+        if (src) {
+          try { loaded[key] = await loadImage(src); } catch { loaded[key] = null; }
+        } else { loaded[key] = null; }
+      }
+      setEyeImagesLoaded2(loaded);
+    };
+    loadAll();
+  }, [assets2.eyeImages]);
 
   // Blink timer
   useEffect(() => {
@@ -238,6 +286,7 @@ export default function App() {
       if (data.lyrics) {
         lyricsList = parseLRC(data.lyrics);
       }
+      setLyricsList(lyricsList);
 
       if (data.audioUrl) {
         abortControllerRef.current?.abort();
@@ -313,6 +362,14 @@ export default function App() {
     setAssets(newAssets);
   }, []);
 
+  const handleAssetsChange2 = useCallback((newAssets: CharacterAssets) => {
+    setAssets2(newAssets);
+  }, []);
+
+  const handleAssignLyrics = useCallback((assignments: Record<string, LyricAssignment>) => {
+    setCharAssignments(assignments);
+  }, []);
+
   const handleSeek = useCallback((time: number) => {
     setPlaybackState((prev) => ({ ...prev, currentTime: time }));
     let newIndex = -1;
@@ -338,6 +395,15 @@ export default function App() {
     });
     loadEyeImages().then((saved) => {
       if (saved) setAssets((prev) => ({ ...prev, eyeImages: { ...prev.eyeImages, ...saved } }));
+    });
+    loadBaseImage2().then((saved) => {
+      if (saved) setAssets2((prev) => ({ ...prev, baseImage: saved }));
+    });
+    loadMouthImages2().then((saved) => {
+      if (saved) setAssets2((prev) => ({ ...prev, mouthImages: { ...prev.mouthImages, ...saved } }));
+    });
+    loadEyeImages2().then((saved) => {
+      if (saved) setAssets2((prev) => ({ ...prev, eyeImages: { ...prev.eyeImages, ...saved } }));
     });
   }, []);
 
@@ -370,7 +436,12 @@ export default function App() {
                 baseImageLoaded={baseImageLoaded}
                 mouthImagesLoaded={mouthImagesLoaded}
                 eyeImagesLoaded={eyeImagesLoaded}
+                assets2={assets2}
+                baseImageLoaded2={baseImageLoaded2}
+                mouthImagesLoaded2={mouthImagesLoaded2}
+                eyeImagesLoaded2={eyeImagesLoaded2}
                 isBlinking={isBlinking}
+                charAssignments={charAssignments}
                 onMouthOffsetChange={(offset) => handleConfigChange({ mouthOffset: offset })}
                 transforms={transforms}
                 editMode={editMode}
@@ -406,6 +477,8 @@ export default function App() {
           canvasRef={canvasRef}
           assets={assets}
           onAssetsChange={handleAssetsChange}
+          assets2={assets2}
+          onAssetsChange2={handleAssetsChange2}
           onSongLoad={handleSongLoad}
           onLyricsLoad={handleLyricsLoad}
           onSeek={handleSeek}
@@ -415,6 +488,9 @@ export default function App() {
           analyzing={analyzing}
           editMode={editMode}
           processedRanges={processedRanges}
+          lyricsList={lyricsList}
+          charAssignments={charAssignments}
+          onAssignLyrics={handleAssignLyrics}
         />
       </div>
     </div>

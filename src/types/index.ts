@@ -3,6 +3,8 @@ export interface LyricLine {
   text: string;
 }
 
+export type LyricAssignment = '1' | '2' | 'both';
+
 export interface SongData {
   title: string;
   artist: string;

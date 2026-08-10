@@ -7,6 +7,9 @@ const STORAGE_KEYS = {
   BASE_IMAGE: 'lip-sync-base-image',
   ASSET_TRANSFORMS: 'lip-sync-asset-transforms',
   EYE_IMAGES: 'lip-sync-eye-images',
+  BASE_IMAGE_2: 'lip-sync-base-image-2',
+  MOUTH_IMAGES_2: 'lip-sync-mouth-images-2',
+  EYE_IMAGES_2: 'lip-sync-eye-images-2',
 } as const;
 
 export function saveUIConfig(config: Partial<UIConfig>): void {
@@ -84,6 +87,54 @@ export async function saveEyeImages(images: EyeImages): Promise<void> {
 export async function loadEyeImages(): Promise<EyeImages | null> {
   try {
     const data = await dbGet(STORAGE_KEYS.EYE_IMAGES);
+    if (data) return JSON.parse(data);
+  } catch {}
+  return null;
+}
+
+export async function saveBaseImage2(dataUrl: string): Promise<void> {
+  try {
+    await dbSet(STORAGE_KEYS.BASE_IMAGE_2, dataUrl);
+  } catch (e) {
+    console.warn('IndexedDB save failed for base image 2', e);
+  }
+}
+
+export async function loadBaseImage2(): Promise<string | null> {
+  try {
+    return await dbGet(STORAGE_KEYS.BASE_IMAGE_2);
+  } catch {
+    return null;
+  }
+}
+
+export async function saveMouthImages2(images: MouthImages): Promise<void> {
+  try {
+    await dbSet(STORAGE_KEYS.MOUTH_IMAGES_2, JSON.stringify(images));
+  } catch (e) {
+    console.warn('IndexedDB save failed for mouth images 2', e);
+  }
+}
+
+export async function loadMouthImages2(): Promise<MouthImages | null> {
+  try {
+    const data = await dbGet(STORAGE_KEYS.MOUTH_IMAGES_2);
+    if (data) return JSON.parse(data);
+  } catch {}
+  return null;
+}
+
+export async function saveEyeImages2(images: EyeImages): Promise<void> {
+  try {
+    await dbSet(STORAGE_KEYS.EYE_IMAGES_2, JSON.stringify(images));
+  } catch (e) {
+    console.warn('IndexedDB save failed for eye images 2', e);
+  }
+}
+
+export async function loadEyeImages2(): Promise<EyeImages | null> {
+  try {
+    const data = await dbGet(STORAGE_KEYS.EYE_IMAGES_2);
     if (data) return JSON.parse(data);
   } catch {}
   return null;

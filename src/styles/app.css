@@ -222,6 +222,7 @@ html, body, #root {
 .cover-box {
   width: 100%;
   aspect-ratio: 1;
+  flex-shrink: 0;
   background: #f0f0f0;
   border-radius: 12px;
   display: flex;
@@ -233,7 +234,7 @@ html, body, #root {
 .cover-box img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .cover-placeholder {
@@ -503,6 +504,55 @@ html, body, #root {
   display: none;
 }
 
+/* Character selector */
+.char-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.char-tab {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 14px;
+  background: #e5e5ea;
+  color: #1d1d1f;
+  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.char-tab.active {
+  background: #1d1d1f;
+  color: white;
+}
+
+.char-tab.disabled {
+  background: #f0f0f2;
+  color: #b0b0b5;
+}
+
+.char-hint {
+  font-size: 10px;
+  color: #ff9500;
+  font-family: 'Inter', sans-serif;
+}
+
+.char-remove-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 14px;
+  background: #ff3b30;
+  color: white;
+  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+}
+
+.char-remove-btn:hover {
+  opacity: 0.85;
+}
+
 .file-lyrics-input {
   width: 100%;
   padding: 6px 10px;
@@ -622,6 +672,43 @@ html, body, #root {
   border-top: 7px solid transparent;
   border-bottom: 7px solid transparent;
   border-right: 8px solid #ffffff;
+}
+
+/* Right pointer: mirrors the left triangle toward character 2 */
+.lyric-pointer-right {
+  display: none;
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  border-left: 11px solid #1d1d1f;
+}
+
+.lyric-pointer-right::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 8px solid #ffffff;
+}
+
+.lyric-item.lyric-char-2::before,
+.lyric-item.lyric-char-2::after {
+  display: none;
+}
+
+.lyric-item.lyric-char-2 .lyric-pointer-right,
+.lyric-item.lyric-char-both .lyric-pointer-right {
+  display: block;
 }
 
 .lyric-original {
@@ -751,6 +838,170 @@ html, body, #root {
   margin-bottom: 4px;
 }
 
+/* ── 歌词分配 modal ── */
+.asset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.asset-btn:disabled:hover {
+  opacity: 0.4;
+}
+
+.assigner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.assigner-panel {
+  width: min(620px, 100%);
+  max-height: 80vh;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+.assigner-header {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1d1d1f;
+  text-align: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e5ea;
+}
+
+.assigner-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #f0f0f2;
+}
+
+.legend-item {
+  font-size: 11px;
+  color: #1d1d1f;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.legend-1 {
+  background: #cfe6ff;
+  color: #0a6ceb;
+}
+
+.legend-2 {
+  background: #d3f3d7;
+  color: #1f9d3a;
+}
+
+.legend-both {
+  background: #ead9f7;
+  color: #8a2fd0;
+}
+
+.legend-tip {
+  font-size: 11px;
+  color: #9a9a9a;
+  margin-left: auto;
+}
+
+.assigner-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.assigner-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #f0f0f2;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.assigner-row:hover {
+  background: #fafafa;
+}
+
+.assigner-row.assigner-1 {
+  background: #cfe6ff;
+  border-color: #8abfff;
+}
+
+.assigner-row.assigner-2 {
+  background: #d3f3d7;
+  border-color: #93dd9e;
+}
+
+.assigner-row.assigner-both {
+  background: #ead9f7;
+  border-color: #c9a0ec;
+}
+
+.assigner-time {
+  font-size: 11px;
+  color: #86868b;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 40px;
+  font-family: monospace;
+}
+
+.assigner-text {
+  min-width: 0;
+}
+
+.assigner-original {
+  font-size: 13px;
+  color: #1d1d1f;
+  line-height: 1.4;
+}
+
+.assigner-translated {
+  font-size: 11px;
+  color: #86868b;
+  line-height: 1.3;
+}
+
+.assigner-confirm {
+  margin: 10px 16px 14px;
+  padding: 8px 0;
+  border: none;
+  border-radius: 14px;
+  background: #1d1d1f;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.assigner-confirm:hover {
+  opacity: 0.85;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .right-panel {
@@ -813,6 +1064,14 @@ html, body, #root {
     padding: 10px 16px;
     font-size: 13px;
     border-radius: 18px;
+  }
+  .char-tab {
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+  .char-remove-btn {
+    padding: 10px 16px;
+    font-size: 13px;
   }
   .model-retry-btn {
     padding: 8px 14px;

@@ -4,6 +4,7 @@ import {
   type UIConfig,
   type LyricLine,
   type AssetTransform,
+  type LyricAssignment,
   DEFAULT_TRANSFORM,
 } from '../types/index';
 
@@ -25,6 +26,10 @@ export interface RenderContext {
   config: UIConfig;
   mouthImagesLoaded: Record<string, HTMLImageElement | null>;
   baseImageLoaded: HTMLImageElement | null;
+  assets2: CharacterAssets;
+  baseImageLoaded2: HTMLImageElement | null;
+  mouthImagesLoaded2: Record<string, HTMLImageElement | null>;
+  eyeImagesLoaded2: Record<string, HTMLImageElement | null>;
   prevLyric: LyricLine | null;
   lyricTransition: number;
   transforms: Record<string, AssetTransform>;
@@ -33,6 +38,7 @@ export interface RenderContext {
   visibleBounds: Record<string, VisibleBounds>;
   eyeImagesLoaded: Record<string, HTMLImageElement | null>;
   isBlinking: boolean;
+  charAssignments?: Record<string, LyricAssignment>;
 }
 
 const visibleBoundsCache = new WeakMap<HTMLImageElement, VisibleBounds>();
@@ -100,14 +106,67 @@ function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.fillRect(0, 0, width, height);
 }
 
+interface CharacterSlot {
+  centerX: number;
+  centerY: number;
+  baseImage: HTMLImageElement | null;
+  baseKey: string;
+  mouthKey: string;
+  mouthImages: Record<string, HTMLImageElement | null>;
+  eyeImages: Record<string, HTMLImageElement | null>;
+  mouthOffset: { x: number; y: number };
+  isBlinking: boolean;
+  mouthShape: MouthShape;
+}
+
 function drawCharacter(r: RenderContext): void {
-  const { ctx, width, height } = r;
-  const img = r.baseImageLoaded;
+  const { width, height } = r;
+  const centerY = height / 2 - 40;
+
+  const assignment = r.charAssignments?.[String(r.currentLyric?.time ?? '')] ?? 'both';
+  const c1Active = assignment === '1' || assignment === 'both';
+  const c2Active = assignment === '2' || assignment === 'both';
+
+  drawCharacterSlot(r, {
+    centerX: width * 0.25,
+    centerY,
+    baseImage: r.baseImageLoaded,
+    baseKey: 'base',
+    mouthKey: 'mouth',
+    mouthImages: r.mouthImagesLoaded,
+    eyeImages: r.eyeImagesLoaded,
+    mouthOffset: r.config.mouthOffset,
+    isBlinking: r.isBlinking,
+    mouthShape: c1Active ? r.mouthShape : 'closed',
+  });
+
+  if (r.baseImageLoaded2) {
+    drawCharacterSlot(r, {
+      centerX: width * 0.75,
+      centerY,
+      baseImage: r.baseImageLoaded2,
+      baseKey: 'c2base',
+      mouthKey: 'c2mouth',
+      mouthImages: r.mouthImagesLoaded2,
+      eyeImages: r.eyeImagesLoaded2,
+      mouthOffset: r.config.mouthOffset,
+      isBlinking: r.isBlinking,
+      mouthShape: c2Active ? r.mouthShape : 'closed',
+    });
+  }
+
+  if (r.editMode && r.selectedAsset) {
+    drawAssetOverlay(r);
+  }
+}
+
+function drawCharacterSlot(r: RenderContext, slot: CharacterSlot): void {
+  const { ctx } = r;
+  const img = slot.baseImage;
   if (!img) return;
 
-  const centerX = width * 0.25;
-  const centerY = height / 2 - 40;
   const { scaleX, scaleY } = r.editMode ? { scaleX: 1, scaleY: 1 } : r.bounceScale;
+  const { centerX, centerY } = slot;
 
   let w = img.width;
   let h = img.height;
@@ -117,7 +176,7 @@ function drawCharacter(r: RenderContext): void {
     h *= s;
   }
 
-  const baseT = r.transforms.base ?? DEFAULT_TRANSFORM;
+  const baseT = r.transforms[slot.baseKey] ?? DEFAULT_TRANSFORM;
   const bw = w * baseT.scale;
   const bh = h * baseT.scale;
   const osW = Math.ceil(bw + CHAR_MARGIN * 2);
@@ -128,7 +187,7 @@ function drawCharacter(r: RenderContext): void {
   if (!octx) return;
 
   octx.clearRect(0, 0, osW, osH);
-  drawFlatCharacter(r, octx, osW, osH, w, h, baseT);
+  drawFlatCharacter(r, octx, osW, osH, w, h, baseT, slot);
 
   const baseCX = centerX + baseT.x;
   const baseCY = centerY + baseT.y;
@@ -141,10 +200,6 @@ function drawCharacter(r: RenderContext): void {
 
   blitCharacter(r, os, osW, osH, baseCX, baseCY, bh);
 
-  if (r.editMode && r.selectedAsset) {
-    drawAssetOverlay(r, centerX, centerY);
-  }
-
   ctx.restore();
 }
 
@@ -156,10 +211,11 @@ function drawFlatCharacter(
   w: number,
   h: number,
   baseT: AssetTransform,
+  slot: CharacterSlot,
 ): void {
   const cx = osW / 2;
   const cy = osH / 2;
-  const img = r.baseImageLoaded!;
+  const img = slot.baseImage!;
 
   octx.save();
   octx.translate(cx, cy);
@@ -169,8 +225,8 @@ function drawFlatCharacter(
   octx.restore();
 
   // Blink overlay (same position/transform as base)
-  if (r.isBlinking) {
-    const blinkImg = r.eyeImagesLoaded.blink ?? null;
+  if (slot.isBlinking) {
+    const blinkImg = slot.eyeImages.blink ?? null;
     if (blinkImg) {
       octx.save();
       octx.translate(cx, cy);
@@ -181,14 +237,14 @@ function drawFlatCharacter(
     }
   }
 
-  const mouthImg = r.mouthImagesLoaded[r.mouthShape] ?? null;
+  const mouthImg = slot.mouthImages[slot.mouthShape] ?? null;
   if (mouthImg) {
     const faceRegionSize = Math.min(w, h) * 0.8;
     const mw = faceRegionSize;
     const mh = (mouthImg.height / mouthImg.width) * mw;
-    const mouthT = r.transforms.mouth ?? DEFAULT_TRANSFORM;
-    const mouthCx = cx + r.config.mouthOffset.x;
-    const mouthCy = cy + r.config.mouthOffset.y;
+    const mouthT = r.transforms[slot.mouthKey] ?? DEFAULT_TRANSFORM;
+    const mouthCx = cx + slot.mouthOffset.x;
+    const mouthCy = cy + slot.mouthOffset.y;
     octx.save();
     octx.translate(mouthCx + mouthT.x, mouthCy + mouthT.y);
     octx.rotate(mouthT.rotation * Math.PI / 180);
@@ -245,8 +301,12 @@ function blitCharacter(
   }
 }
 
+function isBaseKey(key: string): boolean {
+  return key === 'base' || key === 'c2base';
+}
+
 function visibleCenterOffset(key: string, vb: VisibleBounds, fullW: number, fullH: number, maxDim: number): { dx: number; dy: number } {
-  if (key === 'base') {
+  if (isBaseKey(key)) {
     const scale = (fullW > maxDim || fullH > maxDim) ? maxDim / Math.max(fullW, fullH) : 1;
     const sw = fullW * scale;
     const sh = fullH * scale;
@@ -257,7 +317,7 @@ function visibleCenterOffset(key: string, vb: VisibleBounds, fullW: number, full
 }
 
 function scaledVisibleSize(key: string, vb: VisibleBounds, fullW: number, fullH: number, maxDim: number, transformScale: number): { w: number; h: number } {
-  if (key === 'base') {
+  if (isBaseKey(key)) {
     const scale = (fullW > maxDim || fullH > maxDim) ? maxDim / Math.max(fullW, fullH) : 1;
     return { w: vb.w * scale * transformScale, h: vb.h * scale * transformScale };
   }
@@ -281,7 +341,7 @@ export function getAssetCenter(
   const vb = visibleBounds?.[key];
   const maxDim = 400;
 
-  if (key === 'base') {
+  if (isBaseKey(key)) {
     let offX = 0, offY = 0;
     if (vb && baseImageLoaded) {
       const imgW = baseImageLoaded.width;
@@ -305,9 +365,9 @@ export function getAssetSize(
   const maxDim = 400;
   const t = transforms[key] ?? DEFAULT_TRANSFORM;
 
-  if (key === 'base') {
+  if (isBaseKey(key)) {
     if (!baseImageLoaded) return { w: 0, h: 0 };
-    const vb = visibleBounds?.base;
+    const vb = visibleBounds?.[key];
     if (vb) {
       return scaledVisibleSize(key, vb, baseImageLoaded.width, baseImageLoaded.height, maxDim, t.scale);
     }
@@ -336,15 +396,21 @@ export function getAssetSize(
   return { w, h };
 }
 
-function drawAssetOverlay(r: RenderContext, cx: number, cy: number): void {
+function drawAssetOverlay(r: RenderContext): void {
   const { ctx } = r;
   const key = r.selectedAsset!;
   const t = r.transforms[key] ?? DEFAULT_TRANSFORM;
 
   if (key === 'lyric') return;
 
-  const c = getAssetCenter(key, cx, cy, r.config, r.transforms, r.visibleBounds, r.baseImageLoaded ? r.baseImageLoaded : null);
-  const s = getAssetSize(key, r.baseImageLoaded, r.mouthImagesLoaded, r.transforms, r.visibleBounds);
+  const isC2 = key.startsWith('c2');
+  const centerX = r.width * (isC2 ? 0.75 : 0.25);
+  const centerY = r.height / 2 - 40;
+  const baseImage = isC2 ? r.baseImageLoaded2 : r.baseImageLoaded;
+  const mouthImages = isC2 ? r.mouthImagesLoaded2 : r.mouthImagesLoaded;
+
+  const c = getAssetCenter(key, centerX, centerY, r.config, r.transforms, r.visibleBounds, baseImage);
+  const s = getAssetSize(key, baseImage, mouthImages, r.transforms, r.visibleBounds);
   if (s.w === 0 || s.h === 0) return;
   const center = c;
   const size = s;
