@@ -59,11 +59,7 @@ export async function fetchWithProgress(
     const buf = await res.arrayBuffer();
     if (total > 0) onProgress?.(buf.byteLength, total);
     if (cache) {
-      try {
-        await cache.put(url, new Response(buf, { headers: { 'Content-Type': 'application/octet-stream' } }));
-      } catch {
-        // 缓存写入失败（如配额不足）不影响本次加载
-      }
+      cache.put(url, new Response(buf, { headers: { 'Content-Type': 'application/octet-stream' } })).catch(() => {});
     }
     return buf;
   }
@@ -100,11 +96,7 @@ export async function fetchWithProgress(
   }
 
   if (cache) {
-    try {
-      await cache.put(url, new Response(out.buffer, { headers: { 'Content-Type': 'application/octet-stream' } }));
-    } catch {
-      // 缓存写入失败不影响本次加载
-    }
+    cache.put(url, new Response(out.buffer, { headers: { 'Content-Type': 'application/octet-stream' } })).catch(() => {});
   }
 
   return out.buffer;

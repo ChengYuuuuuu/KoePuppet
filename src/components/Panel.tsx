@@ -129,7 +129,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
 
     const { original, translation } = parseLyricText(current.text);
     const id = ++itemIdRef.current;
-    const assignment = charAssignments?.[String(current.time)] ?? 'both';
+    const assignment = charAssignments?.[String(current.time)] ?? '1';
 
     setLyricItems(prev => {
       const updated = prev
@@ -874,7 +874,7 @@ export function RightPanel({
     (time: number) => {
       if (!onAssignLyrics) return;
       const key = String(time);
-      const current: LyricAssignment = charAssignments?.[key] ?? 'both';
+      const current: LyricAssignment = charAssignments?.[key] ?? '1';
       const next: LyricAssignment = current === 'both' ? '1' : current === '1' ? '2' : 'both';
       onAssignLyrics({ ...(charAssignments ?? {}), [key]: next });
     },
@@ -1179,7 +1179,7 @@ export function RightPanel({
             </div>
             <div className="assigner-list">
               {lyricsList?.map((line, i) => {
-                const assignment: LyricAssignment = charAssignments?.[String(line.time)] ?? 'both';
+                const assignment: LyricAssignment = charAssignments?.[String(line.time)] ?? '1';
                 const { original, translation } = parseLyricText(line.text);
                 return (
                   <div

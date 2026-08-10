@@ -123,7 +123,7 @@ function drawCharacter(r: RenderContext): void {
   const { width, height } = r;
   const centerY = height / 2 - 40;
 
-  const assignment = r.charAssignments?.[String(r.currentLyric?.time ?? '')] ?? 'both';
+  const assignment = r.charAssignments?.[String(r.currentLyric?.time ?? '')] ?? '1';
   const c1Active = assignment === '1' || assignment === 'both';
   const c2Active = assignment === '2' || assignment === 'both';
 
