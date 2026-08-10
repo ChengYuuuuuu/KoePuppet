@@ -72,7 +72,7 @@ export function extractSongId(url: string): string | null {
 export function parseLRC(lrcText: string): LyricLine[] {
   const lines = lrcText.split('\n');
   const lyrics: LyricLine[] = [];
-  const timeRegex = /\[(\d{2}):(\d{2})[.:](\d{2,3})\]/g;
+  const timeRegex = /\[(\d{2}):(\d{2})[.:](\d{1,3})\]/g;
 
   for (const line of lines) {
     const matches = [...line.matchAll(timeRegex)];
@@ -84,9 +84,8 @@ export function parseLRC(lrcText: string): LyricLine[] {
     for (const match of matches) {
       const minutes = parseInt(match[1]);
       const seconds = parseInt(match[2]);
-      let millis = parseInt(match[3]);
-      if (match[3].length === 2) millis *= 10;
-      const time = minutes * 60 + seconds + millis / 1000;
+      const fraction = parseFloat(`0.${match[3]}`);
+      const time = minutes * 60 + seconds + fraction;
       lyrics.push({ time, text });
     }
   }

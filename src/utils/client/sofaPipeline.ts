@@ -63,7 +63,7 @@ function extractChunksFromLRC(
   minChunk = 40,
   minRemaining = 15,
 ): Array<{ text: string; start: number; end: number }> {
-  const timeRegex = /\[(\d{2}):(\d{2})[.:](\d{2,3})\]/g;
+  const timeRegex = /\[(\d{2}):(\d{2})[.:](\d{1,3})\]/g;
   const lines = lyrics.trim().split('\n');
   const entries: Array<{ time: number; text: string }> = [];
 
@@ -75,9 +75,8 @@ function extractChunksFromLRC(
     const m = matches[matches.length - 1];
     const minutes = parseInt(m[1]);
     const seconds = parseInt(m[2]);
-    let millis = parseInt(m[3]);
-    if (m[3].length === 2) millis *= 10;
-    entries.push({ time: minutes * 60 + seconds + millis / 1000, text });
+    const fraction = parseFloat(`0.${m[3]}`);
+    entries.push({ time: minutes * 60 + seconds + fraction, text });
   }
 
   entries.sort((a, b) => a.time - b.time);
