@@ -245,12 +245,11 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     function hitTestAsset(mx: number, my: number, key: string, d: typeof animDataRef.current, cw: number, ch: number): boolean {
       const isC2 = key.startsWith('c2');
       const center = isC2 ? { cx: cw * 0.75, cy: ch / 2 - 40 } : getCanvasCenter(cw, ch);
-      const vb = d.visibleBounds;
       const baseImage = isC2 ? d.baseImageLoaded2 : d.baseImageLoaded;
       const mouthImages = isC2 ? d.mouthImagesLoaded2 : d.mouthImagesLoaded;
-      const size = getAssetSize(key, baseImage, mouthImages, d.transforms ?? {}, vb);
+      const size = getAssetSize(key, baseImage, mouthImages, d.transforms ?? {});
       if (size.w === 0 || size.h === 0) return false;
-      const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {}, vb, baseImage);
+      const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {});
       const t = d.transforms?.[key] ?? DEFAULT_TRANSFORM;
       const angle = t.rotation * Math.PI / 180;
       const cos = Math.cos(angle);
@@ -266,12 +265,11 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     function getHandles(key: string, d: typeof animDataRef.current, cw: number, ch: number): { x: number; y: number; type: 'corner' | 'mid' | 'rotate' }[] | null {
       const isC2 = key.startsWith('c2');
       const center = isC2 ? { cx: cw * 0.75, cy: ch / 2 - 40 } : getCanvasCenter(cw, ch);
-      const vb = d.visibleBounds;
       const baseImage = isC2 ? d.baseImageLoaded2 : d.baseImageLoaded;
       const mouthImages = isC2 ? d.mouthImagesLoaded2 : d.mouthImagesLoaded;
-      const size = getAssetSize(key, baseImage, mouthImages, d.transforms ?? {}, vb);
+      const size = getAssetSize(key, baseImage, mouthImages, d.transforms ?? {});
       if (size.w === 0 || size.h === 0) return null;
-      const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {}, vb, baseImage);
+      const assetCenter = getAssetCenter(key, center.cx, center.cy, d.config, d.transforms ?? {});
       const t = d.transforms?.[key] ?? DEFAULT_TRANSFORM;
       const angle = t.rotation * Math.PI / 180;
       const cos = Math.cos(angle);
@@ -449,8 +447,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
               const selIsC2 = d.selectedAsset.startsWith('c2');
               const selCenter = selIsC2 ? c2center : c1center;
               const currentT = d.transforms?.[d.selectedAsset] ?? { ...DEFAULT_TRANSFORM };
-              const vb = d.visibleBounds;
-              const assetCenter = getAssetCenter(d.selectedAsset, selCenter.cx, selCenter.cy, d.config, d.transforms ?? {}, vb, selIsC2 ? d.baseImageLoaded2 : d.baseImageLoaded);
+              const assetCenter = getAssetCenter(d.selectedAsset, selCenter.cx, selCenter.cy, d.config, d.transforms ?? {});
               if (hit.type === 'rotate') {
                 editInteraction.current = { type: 'rotate', startX: mx, startY: my, cx: assetCenter.x, cy: assetCenter.y, startT: { ...currentT } };
                 canvas.style.cursor = 'crosshair';
@@ -477,8 +474,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
           if (hitTestAsset(mx, my, key, d, rect2.width, rect2.height)) {
             d.onSelectAsset?.(key);
             const currentT = d.transforms?.[key] ?? { ...DEFAULT_TRANSFORM };
-            const vb = d.visibleBounds;
-            const assetCenter = getAssetCenter(key, entry.cx, entry.cy, d.config, d.transforms ?? {}, vb, key.startsWith('c2') ? d.baseImageLoaded2 : d.baseImageLoaded);
+            const assetCenter = getAssetCenter(key, entry.cx, entry.cy, d.config, d.transforms ?? {});
             editInteraction.current = { type: 'move', startX: mx, startY: my, cx: assetCenter.x, cy: assetCenter.y, startT: { ...currentT } };
             canvas.style.cursor = 'grabbing';
             try { canvas.setPointerCapture(e.pointerId); } catch {}

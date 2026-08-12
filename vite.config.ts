@@ -1,7 +1,34 @@
+import { existsSync, lstatSync, readdirSync, rmdirSync, unlinkSync } from 'node:fs'
+import path from 'node:path'
 import type { Plugin } from 'vite'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import compression from 'vite-plugin-compression'
+
+function wipeDir(dir: string): void {
+  for (const name of readdirSync(dir)) {
+    const filePath = path.join(dir, name)
+    if (lstatSync(filePath).isDirectory()) wipeDir(filePath)
+    else unlinkSync(filePath)
+  }
+  rmdirSync(dir)
+}
+
+function cleanOutDir(): Plugin {
+  let root: string | undefined
+  let outDir: string | undefined
+  return {
+    name: 'clean-out-dir',
+    apply: 'build',
+    configResolved(config) {
+      root = config.root
+      outDir = path.resolve(config.root, config.build.outDir)
+    },
+    buildStart() {
+      if (outDir && root && outDir !== root && existsSync(outDir)) wipeDir(outDir)
+    },
+  }
+}
 
 function removeUnusedOrtWasm(): Plugin {
   return {
@@ -27,6 +54,7 @@ export default defineConfig({
     exclude: ['onnxruntime-web'],
   },
   plugins: [
+    cleanOutDir(),
     react(),
     compression({ algorithm: 'brotliCompress' }),
     removeUnusedOrtWasm(),

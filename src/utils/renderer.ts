@@ -305,52 +305,17 @@ function isBaseKey(key: string): boolean {
   return key === 'base' || key === 'c2base';
 }
 
-function visibleCenterOffset(key: string, vb: VisibleBounds, fullW: number, fullH: number, maxDim: number): { dx: number; dy: number } {
-  if (isBaseKey(key)) {
-    const scale = (fullW > maxDim || fullH > maxDim) ? maxDim / Math.max(fullW, fullH) : 1;
-    const sw = fullW * scale;
-    const sh = fullH * scale;
-    const svb = { x: vb.x * scale, y: vb.y * scale, w: vb.w * scale, h: vb.h * scale };
-    return { dx: svb.x + svb.w / 2 - sw / 2, dy: svb.y + svb.h / 2 - sh / 2 };
-  }
-  return { dx: 0, dy: 0 };
-}
-
-function scaledVisibleSize(key: string, vb: VisibleBounds, fullW: number, fullH: number, maxDim: number, transformScale: number): { w: number; h: number } {
-  if (isBaseKey(key)) {
-    const scale = (fullW > maxDim || fullH > maxDim) ? maxDim / Math.max(fullW, fullH) : 1;
-    return { w: vb.w * scale * transformScale, h: vb.h * scale * transformScale };
-  }
-  const faceScale = Math.min(fullW, fullH) > maxDim ? maxDim / Math.max(fullW, fullH) : 1;
-  const faceRegionSize = Math.min(fullW * faceScale, fullH * faceScale) * 0.8;
-  const mouthW = faceRegionSize;
-  const mouthH = vb.h / vb.w * faceRegionSize;
-  return { w: mouthW * transformScale, h: mouthH * transformScale };
-}
-
 export function getAssetCenter(
   key: string,
   cx: number,
   cy: number,
   config: UIConfig,
   transforms: Record<string, AssetTransform>,
-  visibleBounds?: Record<string, VisibleBounds>,
-  baseImageLoaded?: HTMLImageElement | null,
 ): { x: number; y: number } {
   const t = transforms[key] ?? DEFAULT_TRANSFORM;
-  const vb = visibleBounds?.[key];
-  const maxDim = 400;
 
   if (isBaseKey(key)) {
-    let offX = 0, offY = 0;
-    if (vb && baseImageLoaded) {
-      const imgW = baseImageLoaded.width;
-      const imgH = baseImageLoaded.height;
-      const offset = visibleCenterOffset(key, vb, imgW, imgH, maxDim);
-      offX = offset.dx;
-      offY = offset.dy;
-    }
-    return { x: cx + t.x + offX, y: cy + t.y + offY };
+    return { x: cx + t.x, y: cy + t.y };
   }
   return { x: cx + config.mouthOffset.x + t.x, y: cy + config.mouthOffset.y + t.y };
 }
@@ -360,17 +325,12 @@ export function getAssetSize(
   baseImageLoaded: HTMLImageElement | null,
   mouthImagesLoaded: Record<string, HTMLImageElement | null>,
   transforms: Record<string, AssetTransform>,
-  visibleBounds?: Record<string, VisibleBounds>,
 ): { w: number; h: number } {
   const maxDim = 400;
   const t = transforms[key] ?? DEFAULT_TRANSFORM;
 
   if (isBaseKey(key)) {
     if (!baseImageLoaded) return { w: 0, h: 0 };
-    const vb = visibleBounds?.[key];
-    if (vb) {
-      return scaledVisibleSize(key, vb, baseImageLoaded.width, baseImageLoaded.height, maxDim, t.scale);
-    }
     let w = baseImageLoaded.width;
     let h = baseImageLoaded.height;
     if (w > maxDim || h > maxDim) {
@@ -382,7 +342,6 @@ export function getAssetSize(
 
   const anyMouthImg = Object.values(mouthImagesLoaded).find(v => v !== null) ?? null;
   if (!anyMouthImg || !baseImageLoaded) return { w: 0, h: 0 };
-  const vb = visibleBounds?.mouth ?? (anyMouthImg ? computeVisibleBounds(anyMouthImg) : undefined);
   let bw = baseImageLoaded.width;
   let bh = baseImageLoaded.height;
   if (bw > maxDim || bh > maxDim) {
@@ -390,7 +349,7 @@ export function getAssetSize(
     bw *= s; bh *= s;
   }
   const faceRegionSize = Math.min(bw, bh) * 0.8;
-  const mouthAspect = vb ? (vb.h / vb.w) : (anyMouthImg.height / anyMouthImg.width);
+  const mouthAspect = anyMouthImg.height / anyMouthImg.width;
   const w = faceRegionSize * t.scale;
   const h = mouthAspect * faceRegionSize * t.scale;
   return { w, h };
@@ -409,8 +368,8 @@ function drawAssetOverlay(r: RenderContext): void {
   const baseImage = isC2 ? r.baseImageLoaded2 : r.baseImageLoaded;
   const mouthImages = isC2 ? r.mouthImagesLoaded2 : r.mouthImagesLoaded;
 
-  const c = getAssetCenter(key, centerX, centerY, r.config, r.transforms, r.visibleBounds, baseImage);
-  const s = getAssetSize(key, baseImage, mouthImages, r.transforms, r.visibleBounds);
+  const c = getAssetCenter(key, centerX, centerY, r.config, r.transforms);
+  const s = getAssetSize(key, baseImage, mouthImages, r.transforms);
   if (s.w === 0 || s.h === 0) return;
   const center = c;
   const size = s;
