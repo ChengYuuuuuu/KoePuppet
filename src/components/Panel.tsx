@@ -620,6 +620,9 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     };
   }
 
+  const activeAssignment = lyricItems.length > 0 ? lyricItems[lyricItems.length - 1].assignment : 'both';
+  const lyricShiftX = activeAssignment === '1' ? -20 : activeAssignment === '2' ? 20 : 0;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <canvas ref={ref as React.Ref<HTMLCanvasElement>} style={{ width: '100%', height: '100%', display: 'block' }} />
@@ -627,9 +630,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
         <div
           className={`lyric-container${editMode ? ' lyric-editable' : ''}${selectedAsset === 'lyric' && editMode ? ' lyric-selected' : ''}`}
           style={{
-            ...(transforms?.lyric ? {
-              transform: `translate(${transforms.lyric.x}px, ${transforms.lyric.y}px) rotate(${transforms.lyric.rotation}deg) scale(${transforms.lyric.scale})`,
-            } : {}),
+            transform: `translate(${(transforms?.lyric?.x ?? 0) + lyricShiftX}px, ${transforms?.lyric?.y ?? 0}px) rotate(${transforms?.lyric?.rotation ?? 0}deg) scale(${transforms?.lyric?.scale ?? 1})`,
             ...(editMode && selectedAsset === 'lyric' ? { height: lyricContentHeight + 40 } : {}),
           }}
           onPointerDown={handleLyricPointerDown}

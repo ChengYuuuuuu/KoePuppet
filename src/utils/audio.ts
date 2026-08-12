@@ -330,7 +330,7 @@ export function updateBounce(
   intensity: number
 ): BounceState {
   let { phase, currentBeatIndex, triggerTime } = state;
-  const i = 0.3 + intensity * 0.7;
+  const i = intensity * 0.86;
 
   const nextBeat = currentBeatIndex + 1;
   const hasNext = nextBeat < beatTimes.length;
