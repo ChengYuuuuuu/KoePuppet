@@ -620,8 +620,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     };
   }
 
-  const activeAssignment = lyricItems.length > 0 ? lyricItems[lyricItems.length - 1].assignment : 'both';
-  const lyricShiftX = activeAssignment === '1' ? -20 : activeAssignment === '2' ? 20 : 0;
+  const shiftFor = (a: LyricAssignment): number => a === '1' ? -20 : a === '2' ? 20 : 0;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -630,7 +629,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
         <div
           className={`lyric-container${editMode ? ' lyric-editable' : ''}${selectedAsset === 'lyric' && editMode ? ' lyric-selected' : ''}`}
           style={{
-            transform: `translate(${(transforms?.lyric?.x ?? 0) + lyricShiftX}px, ${transforms?.lyric?.y ?? 0}px) rotate(${transforms?.lyric?.rotation ?? 0}deg) scale(${transforms?.lyric?.scale ?? 1})`,
+            transform: `translate(${transforms?.lyric?.x ?? 0}px, ${transforms?.lyric?.y ?? 0}px) rotate(${transforms?.lyric?.rotation ?? 0}deg) scale(${transforms?.lyric?.scale ?? 1})`,
             ...(editMode && selectedAsset === 'lyric' ? { height: lyricContentHeight + 40 } : {}),
           }}
           onPointerDown={handleLyricPointerDown}
@@ -650,7 +649,10 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
               key={item.id}
               ref={el => { if (el) itemRefs.current.set(item.id, el); }}
               className={`lyric-item level-${item.level}${item.entering ? ' entering' : ''} lyric-char-${item.assignment}`}
-              style={{ bottom: bottoms[item.id] ?? 0 }}
+              style={{
+                bottom: bottoms[item.id] ?? 0,
+                transform: `translateX(${shiftFor(item.assignment)}px)${item.entering ? ' translateY(30px)' : ''}`,
+              }}
             >
               <span className="lyric-pointer-right" />
               <div className="lyric-original">{item.original}</div>

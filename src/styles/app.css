@@ -612,14 +612,12 @@ html, body, #root {
   pointer-events: none;
   user-select: none;
   z-index: 10;
-  transition: transform 0.3s ease;
 }
 
 .lyric-editable {
   pointer-events: auto;
   cursor: grab;
   touch-action: none;
-  transition: none;
 }
 
 .lyric-selected {
