@@ -13,7 +13,7 @@ import {
   type LyricAssignment,
   DEFAULT_TRANSFORM,
 } from '../types/index';
-import { parseNeteaseSong } from '../utils/api';
+import { parseSongUrl } from '../utils/api';
 import { phonemesToMouthPoints } from '../utils/mouthMapper';
 import { getModelLoadState, subscribeModelLoadState, ensureModelsLoaded, analyzeSofaFile } from '../utils/streamingSofa';
 import { getAnalysisState, subscribeAnalysisState, type AnalysisStage } from '../utils/client/analysisDiag';
@@ -795,7 +795,7 @@ export function RightPanel({
     if (!url.trim()) return;
     setLoading(true);
     setError('');
-    const result = await parseNeteaseSong(url);
+    const result = await parseSongUrl(url);
     if (result.success && result.data) {
       onSongLoad(result.data);
       onLyricsLoad(result.data.lyrics);
@@ -952,7 +952,7 @@ export function RightPanel({
       <div className="song-import">
         <input
           type="url"
-          placeholder="网易云链接..."
+          placeholder="网易云 / QQ音乐链接..."
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
