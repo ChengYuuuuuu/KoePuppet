@@ -433,6 +433,30 @@ html, body, #root {
   text-align: right;
 }
 
+.bg-color-picker {
+  width: 80px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #d0d0d5;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.bg-color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.bg-color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 8px;
+}
+
+.bg-color-picker::-moz-color-swatch {
+  border: none;
+  border-radius: 8px;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;
@@ -551,6 +575,16 @@ html, body, #root {
 
 .char-remove-btn:hover {
   opacity: 0.85;
+}
+
+.char-reset-btn {
+  border: 1px solid #d0d0d5;
+  background: #ffffff;
+  color: #1d1d1f;
+}
+
+.char-reset-btn:hover {
+  background: #f5f5f7;
 }
 
 .file-lyrics-input {

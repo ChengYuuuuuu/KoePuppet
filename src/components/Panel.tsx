@@ -209,6 +209,32 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     }
   }, [playbackState.isPlaying, editMode]);
 
+  useEffect(() => {
+    if (renderRequestedRef.current) return;
+    setRenderTick(t => t + 1);
+  }, [
+    baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded,
+    baseImageLoaded2, mouthImagesLoaded2, eyeImagesLoaded2,
+    assets, assets2, transforms,
+  ]);
+
+  useEffect(() => {
+    const canvas = (ref as React.RefObject<HTMLCanvasElement | null>).current;
+    if (!canvas) return;
+    let lastW = -1;
+    let lastH = -1;
+    const ro = new ResizeObserver(() => {
+      const r = canvas.getBoundingClientRect();
+      if (r.width !== lastW || r.height !== lastH) {
+        lastW = r.width;
+        lastH = r.height;
+        setRenderTick(t => t + 1);
+      }
+    });
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [ref]);
+
   animDataRef.current = {
     playbackState, mouthShape, bounceScale, beatTimes, audioEngine, assets, config,
     baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded,
@@ -309,7 +335,20 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
     }
 
     let animFrameId: number | null = null;
-    let lastDrawn = { w: -1, h: -1, mouthShape: '', scaleX: 0, scaleY: 0, swayAngle: 0, isBlinking: false, lyric: null as LyricLine | null, energy: 0 };
+    let lastDrawn = {
+      w: -1, h: -1, mouthShape: '', scaleX: 0, scaleY: 0, swayAngle: 0, isBlinking: false,
+      lyric: null as LyricLine | null, energy: 0,
+      assets: null as CharacterAssets | null,
+      assets2: null as CharacterAssets | null,
+      config: null as UIConfig | null,
+      transforms: null as Record<string, AssetTransform> | null,
+      baseImage: null as HTMLImageElement | null,
+      baseImage2: null as HTMLImageElement | null,
+      mouthImages: null as Record<string, HTMLImageElement | null> | null,
+      mouthImages2: null as Record<string, HTMLImageElement | null> | null,
+      eyeImages: null as Record<string, HTMLImageElement | null> | null,
+      eyeImages2: null as Record<string, HTMLImageElement | null> | null,
+    };
 
     const frame = (now: number) => {
       if (!running) return;
@@ -369,7 +408,17 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
         || d.isBlinking !== lastDrawn.isBlinking
         || currentLyric !== lastDrawn.lyric
         || lyricTransition < 1
-        || d.playbackState.energy !== lastDrawn.energy;
+        || d.playbackState.energy !== lastDrawn.energy
+        || d.assets !== lastDrawn.assets
+        || d.assets2 !== lastDrawn.assets2
+        || d.config !== lastDrawn.config
+        || d.transforms !== lastDrawn.transforms
+        || d.baseImageLoaded !== lastDrawn.baseImage
+        || d.baseImageLoaded2 !== lastDrawn.baseImage2
+        || d.mouthImagesLoaded !== lastDrawn.mouthImages
+        || d.mouthImagesLoaded2 !== lastDrawn.mouthImages2
+        || d.eyeImagesLoaded !== lastDrawn.eyeImages
+        || d.eyeImagesLoaded2 !== lastDrawn.eyeImages2;
 
       if (dirty) {
         lastDrawn = {
@@ -381,6 +430,16 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
           isBlinking: d.isBlinking,
           lyric: currentLyric,
           energy: d.playbackState.energy,
+          assets: d.assets,
+          assets2: d.assets2,
+          config: d.config,
+          transforms: d.transforms ?? null,
+          baseImage: d.baseImageLoaded,
+          baseImage2: d.baseImageLoaded2,
+          mouthImages: d.mouthImagesLoaded,
+          mouthImages2: d.mouthImagesLoaded2,
+          eyeImages: d.eyeImagesLoaded,
+          eyeImages2: d.eyeImagesLoaded2,
         };
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const rc = {
@@ -546,7 +605,7 @@ export const CanvasPreview = forwardRef<HTMLCanvasElement, CanvasPreviewProps>(f
       window.removeEventListener('pointercancel', onPointerUp);
       editInteraction.current = null;
     };
-  }, [ref, renderTick, baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded]);
+  }, [ref, renderTick, assets, assets2, config, baseImageLoaded, mouthImagesLoaded, eyeImagesLoaded, baseImageLoaded2, mouthImagesLoaded2, eyeImagesLoaded2]);
 
   const handleLyricPointerDown = (e: React.PointerEvent) => {
     if (!editMode) return;
@@ -687,6 +746,7 @@ interface RightPanelProps {
   lyricsList?: LyricLine[];
   charAssignments?: Record<string, LyricAssignment>;
   onAssignLyrics?: (assignments: Record<string, LyricAssignment>) => void;
+  onResetAssetTransform?: (key: string) => void;
 }
 
 const MOUTH_KEYS: (keyof MouthImages)[] = ['closed', 'A', 'E', 'I', 'O', 'U'];
@@ -720,6 +780,7 @@ export function RightPanel({
   lyricsList,
   charAssignments,
   onAssignLyrics,
+  onResetAssetTransform,
 }: RightPanelProps) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -777,14 +838,16 @@ export function RightPanel({
         if (char === 2) {
           await saveBaseImage2(dataUrl);
           onAssetsChange2({ ...assets2, baseImage: dataUrl });
+          onResetAssetTransform?.('c2base');
         } else {
           await saveBaseImage(dataUrl);
           onAssetsChange({ ...assets, baseImage: dataUrl });
+          onResetAssetTransform?.('base');
         }
       };
       reader.readAsDataURL(file);
     },
-    [assets, onAssetsChange, assets2, onAssetsChange2]
+    [assets, onAssetsChange, assets2, onAssetsChange2, onResetAssetTransform]
   );
 
   const handleMouthUpload = useCallback(
@@ -798,15 +861,17 @@ export function RightPanel({
           const newMouthImages = { ...assets2.mouthImages, [key]: dataUrl };
           await saveMouthImages2(newMouthImages);
           onAssetsChange2({ ...assets2, mouthImages: newMouthImages });
+          onResetAssetTransform?.('c2mouth');
         } else {
           const newMouthImages = { ...assets.mouthImages, [key]: dataUrl };
           await saveMouthImages(newMouthImages);
           onAssetsChange({ ...assets, mouthImages: newMouthImages });
+          onResetAssetTransform?.('mouth');
         }
       };
       reader.readAsDataURL(file);
     },
-    [assets, onAssetsChange, assets2, onAssetsChange2]
+    [assets, onAssetsChange, assets2, onAssetsChange2, onResetAssetTransform]
   );
 
   const handleEyeUpload = useCallback(
@@ -1106,6 +1171,15 @@ export function RightPanel({
                 {assets.eyeImages.blink ? '闭眼图 ✓' : '闭眼图'}
                 <input type="file" accept="image/png" onChange={handleEyeUpload(1, 'blink')} disabled={editMode} />
               </label>
+              <button
+                className="asset-btn char-reset-btn"
+                onClick={() => {
+                  onResetAssetTransform?.('base');
+                  onResetAssetTransform?.('mouth');
+                }}
+              >
+                复位位置
+              </button>
             </>
           ) : (
             <>
@@ -1124,15 +1198,38 @@ export function RightPanel({
                 <input type="file" accept="image/png" onChange={handleEyeUpload(2, 'blink')} disabled={editMode} />
               </label>
               {assets2.baseImage && (
-                <button
-                  className="char-remove-btn"
-                  onClick={() => onAssetsChange2({ baseImage: null, mouthImages: { A: null, E: null, I: null, O: null, U: null, closed: null }, eyeImages: { blink: null } })}
-                >
-                  移除角色2
-                </button>
+                <>
+                  <button
+                    className="asset-btn char-reset-btn"
+                    onClick={() => {
+                      onResetAssetTransform?.('c2base');
+                      onResetAssetTransform?.('c2mouth');
+                    }}
+                  >
+                    复位位置
+                  </button>
+                  <button
+                    className="char-remove-btn"
+                    onClick={() => onAssetsChange2({ baseImage: null, mouthImages: { A: null, E: null, I: null, O: null, U: null, closed: null }, eyeImages: { blink: null } })}
+                  >
+                    移除角色2
+                  </button>
+                </>
               )}
             </>
           )}
+        </div>
+      </div>
+
+      <div className="asset-section">
+        <div className="label">背景色</div>
+        <div className="asset-btns">
+          <input
+            type="color"
+            className="bg-color-picker"
+            value={config.backgroundColor}
+            onChange={(e) => onConfigChange({ backgroundColor: e.target.value })}
+          />
         </div>
       </div>
 

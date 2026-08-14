@@ -102,7 +102,7 @@ export const DEFAULT_UI_CONFIG: UIConfig = {
   bounceIntensity: 0.6,
   swayIntensity: 0.5,
   lyricOffset: 0,
-  backgroundColor: '#1a1a2e',
+  backgroundColor: '#ffffff',
   blinkFrequency: 30,
   vocalSeparation: false,
 };

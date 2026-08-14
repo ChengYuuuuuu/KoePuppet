@@ -19,6 +19,7 @@ import {
   type EyeImages,
   type TimeRange,
   type LyricAssignment,
+  DEFAULT_TRANSFORM,
 } from './types/index';
 import './styles/app.css';
 
@@ -95,6 +96,14 @@ export default function App() {
     setEditMode(false);
     setSelectedAsset(null);
   }, [transforms]);
+
+  const handleResetAssetTransform = useCallback((key: string) => {
+    setTransforms((prev) => {
+      const next = { ...prev, [key]: { ...DEFAULT_TRANSFORM } };
+      saveAssetTransforms(next);
+      return next;
+    });
+  }, []);
 
   const audioEngineRef = useRef<AudioEngine | null>(null);
   const bounceStateRef = useRef<BounceState>({ phase: 'idle', currentBeatIndex: -1, triggerTime: 0, scaleX: 1, scaleY: 1 });
@@ -491,6 +500,7 @@ export default function App() {
           lyricsList={lyricsList}
           charAssignments={charAssignments}
           onAssignLyrics={handleAssignLyrics}
+          onResetAssetTransform={handleResetAssetTransform}
         />
       </div>
     </div>

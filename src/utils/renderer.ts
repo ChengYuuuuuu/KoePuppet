@@ -96,13 +96,13 @@ export function computeVisibleBounds(img: HTMLImageElement): VisibleBounds {
 export function renderFrame(r: RenderContext): void {
   const { ctx, width, height } = r;
   ctx.clearRect(0, 0, width, height);
-  drawBackground(ctx, width, height);
+  drawBackground(ctx, width, height, r.config.backgroundColor);
   drawCharacter(r);
   drawHUD(r);
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-  ctx.fillStyle = '#ffffff';
+function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: number, color: string): void {
+  ctx.fillStyle = color;
   ctx.fillRect(0, 0, width, height);
 }
 
