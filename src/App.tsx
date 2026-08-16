@@ -3,7 +3,7 @@ import { CanvasPreview, RightPanel } from './components/Panel';
 import { AudioEngine, updateBounce } from './utils/audio';
 import { parseLRC, getCurrentLyric } from './utils/api';
 import { loadImage } from './utils/renderer';
-import { saveUIConfig, loadUIConfig, loadBaseImage, loadMouthImages, loadAssetTransforms, saveAssetTransforms, loadEyeImages, loadBaseImage2, loadMouthImages2, loadEyeImages2 } from './utils/storage';
+import { saveUIConfig, loadUIConfig, loadBaseImage, loadMouthImages, loadAssetTransforms, saveAssetTransforms, loadEyeImages, loadBaseImage2, loadMouthImages2, loadEyeImages2, clearAssets, clearAssets2 } from './utils/storage';
 import { analyzeSofaUrlChunked } from './utils/streamingSofa';
 import { phonemesToMouthPoints } from './utils/mouthMapper';
 import {
@@ -103,6 +103,26 @@ export default function App() {
       saveAssetTransforms(next);
       return next;
     });
+  }, []);
+
+  const handleRemoveChar = useCallback(async (char: 1 | 2): Promise<boolean> => {
+    if (char === 1) {
+      setAssets({ ...defaultAssets, mouthImages: { ...defaultAssets.mouthImages } });
+      setTransforms((prev) => {
+        const next = { ...prev, base: { ...DEFAULT_TRANSFORM }, mouth: { ...DEFAULT_TRANSFORM } };
+        saveAssetTransforms(next);
+        return next;
+      });
+      return await clearAssets();
+    } else {
+      setAssets2({ baseImage: null, mouthImages: { A: null, E: null, I: null, O: null, U: null, closed: null }, eyeImages: { blink: null } });
+      setTransforms((prev) => {
+        const next = { ...prev, c2base: { ...DEFAULT_TRANSFORM }, c2mouth: { ...DEFAULT_TRANSFORM } };
+        saveAssetTransforms(next);
+        return next;
+      });
+      return await clearAssets2();
+    }
   }, []);
 
   const audioEngineRef = useRef<AudioEngine | null>(null);
@@ -522,6 +542,7 @@ export default function App() {
           charAssignments={charAssignments}
           onAssignLyrics={handleAssignLyrics}
           onResetAssetTransform={handleResetAssetTransform}
+          onRemoveChar={handleRemoveChar}
         />
       </div>
     </div>

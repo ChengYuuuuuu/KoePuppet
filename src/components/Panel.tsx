@@ -747,6 +747,7 @@ interface RightPanelProps {
   charAssignments?: Record<string, LyricAssignment>;
   onAssignLyrics?: (assignments: Record<string, LyricAssignment>) => void;
   onResetAssetTransform?: (key: string) => void;
+  onRemoveChar?: (char: 1 | 2) => Promise<boolean>;
 }
 
 const MOUTH_KEYS: (keyof MouthImages)[] = ['closed', 'A', 'E', 'I', 'O', 'U'];
@@ -781,6 +782,7 @@ export function RightPanel({
   charAssignments,
   onAssignLyrics,
   onResetAssetTransform,
+  onRemoveChar,
 }: RightPanelProps) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1194,6 +1196,15 @@ export function RightPanel({
               >
                 复位位置
               </button>
+              <button
+                className="char-remove-btn"
+                onClick={async () => {
+                  const ok = (await onRemoveChar?.(1)) ?? true;
+                  if (!ok) setAssetError('角色1 素材清除失败，刷新后可能仍在');
+                }}
+              >
+                移除角色1
+              </button>
             </>
           ) : (
             <>
@@ -1224,7 +1235,10 @@ export function RightPanel({
                   </button>
                   <button
                     className="char-remove-btn"
-                    onClick={() => onAssetsChange2({ baseImage: null, mouthImages: { A: null, E: null, I: null, O: null, U: null, closed: null }, eyeImages: { blink: null } })}
+                    onClick={async () => {
+                      const ok = (await onRemoveChar?.(2)) ?? true;
+                      if (!ok) setAssetError('角色2 素材清除失败，刷新后可能仍在');
+                    }}
                   >
                     移除角色2
                   </button>

@@ -152,3 +152,27 @@ export async function loadEyeImages2(): Promise<EyeImages | null> {
   return null;
 }
 
+export async function clearAssets(): Promise<boolean> {
+  try {
+    await dbDelete(STORAGE_KEYS.BASE_IMAGE);
+    await dbDelete(STORAGE_KEYS.MOUTH_IMAGES);
+    await dbDelete(STORAGE_KEYS.EYE_IMAGES);
+    return true;
+  } catch (e) {
+    console.warn('IndexedDB clear failed for role 1 assets', e);
+    return false;
+  }
+}
+
+export async function clearAssets2(): Promise<boolean> {
+  try {
+    await dbDelete(STORAGE_KEYS.BASE_IMAGE_2);
+    await dbDelete(STORAGE_KEYS.MOUTH_IMAGES_2);
+    await dbDelete(STORAGE_KEYS.EYE_IMAGES_2);
+    return true;
+  } catch (e) {
+    console.warn('IndexedDB clear failed for role 2 assets', e);
+    return false;
+  }
+}
+
