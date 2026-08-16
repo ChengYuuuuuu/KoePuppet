@@ -788,6 +788,7 @@ export function RightPanel({
   const [dragTime, setDragTime] = useState<number | null>(null);
   const [activeChar, setActiveChar] = useState<1 | 2>(1);
   const [showAssigner, setShowAssigner] = useState(false);
+  const [assetError, setAssetError] = useState('');
   const modelLoadState = useSyncExternalStore(subscribeModelLoadState, getModelLoadState);
   const analysisState = useSyncExternalStore(subscribeAnalysisState, getAnalysisState);
 
@@ -831,21 +832,25 @@ export function RightPanel({
   const handleBaseImageUpload = useCallback(
     (char: 1 | 2) => (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
+      const input = e.currentTarget;
       if (!file) return;
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
         if (char === 2) {
-          await saveBaseImage2(dataUrl);
           onAssetsChange2({ ...assets2, baseImage: dataUrl });
           onResetAssetTransform?.('c2base');
+          const ok = await saveBaseImage2(dataUrl);
+          if (!ok) setAssetError('角色2 底图保存失败（可能空间不足），刷新后会丢失');
         } else {
-          await saveBaseImage(dataUrl);
           onAssetsChange({ ...assets, baseImage: dataUrl });
           onResetAssetTransform?.('base');
+          const ok = await saveBaseImage(dataUrl);
+          if (!ok) setAssetError('角色1 底图保存失败（可能空间不足），刷新后会丢失');
         }
       };
       reader.readAsDataURL(file);
+      input.value = '';
     },
     [assets, onAssetsChange, assets2, onAssetsChange2, onResetAssetTransform]
   );
@@ -853,23 +858,27 @@ export function RightPanel({
   const handleMouthUpload = useCallback(
     (char: 1 | 2, key: keyof MouthImages) => (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
+      const input = e.currentTarget;
       if (!file) return;
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
         if (char === 2) {
           const newMouthImages = { ...assets2.mouthImages, [key]: dataUrl };
-          await saveMouthImages2(newMouthImages);
           onAssetsChange2({ ...assets2, mouthImages: newMouthImages });
           onResetAssetTransform?.('c2mouth');
+          const ok = await saveMouthImages2(newMouthImages);
+          if (!ok) setAssetError('角色2 口型图保存失败（可能空间不足），刷新后会丢失');
         } else {
           const newMouthImages = { ...assets.mouthImages, [key]: dataUrl };
-          await saveMouthImages(newMouthImages);
           onAssetsChange({ ...assets, mouthImages: newMouthImages });
           onResetAssetTransform?.('mouth');
+          const ok = await saveMouthImages(newMouthImages);
+          if (!ok) setAssetError('角色1 口型图保存失败（可能空间不足），刷新后会丢失');
         }
       };
       reader.readAsDataURL(file);
+      input.value = '';
     },
     [assets, onAssetsChange, assets2, onAssetsChange2, onResetAssetTransform]
   );
@@ -877,21 +886,25 @@ export function RightPanel({
   const handleEyeUpload = useCallback(
     (char: 1 | 2, key: keyof EyeImages) => (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
+      const input = e.currentTarget;
       if (!file) return;
       const reader = new FileReader();
       reader.onload = async () => {
         const dataUrl = reader.result as string;
         if (char === 2) {
           const newEyeImages = { ...assets2.eyeImages, [key]: dataUrl };
-          await saveEyeImages2(newEyeImages);
           onAssetsChange2({ ...assets2, eyeImages: newEyeImages });
+          const ok = await saveEyeImages2(newEyeImages);
+          if (!ok) setAssetError('角色2 闭眼图保存失败（可能空间不足），刷新后会丢失');
         } else {
           const newEyeImages = { ...assets.eyeImages, [key]: dataUrl };
-          await saveEyeImages(newEyeImages);
           onAssetsChange({ ...assets, eyeImages: newEyeImages });
+          const ok = await saveEyeImages(newEyeImages);
+          if (!ok) setAssetError('角色1 闭眼图保存失败（可能空间不足），刷新后会丢失');
         }
       };
       reader.readAsDataURL(file);
+      input.value = '';
     },
     [assets, onAssetsChange, assets2, onAssetsChange2]
   );
@@ -1154,6 +1167,7 @@ export function RightPanel({
 
       <div className="asset-section">
         <div className="label">角色素材 · 角色{activeChar}</div>
+        {assetError && <div className="char-hint">{assetError}</div>}
         <div className="asset-btns">
           {activeChar === 1 ? (
             <>

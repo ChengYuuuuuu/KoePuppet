@@ -28,11 +28,13 @@ export function loadUIConfig(): UIConfig {
   return { ...DEFAULT_UI_CONFIG };
 }
 
-export async function saveBaseImage(dataUrl: string): Promise<void> {
+export async function saveBaseImage(dataUrl: string): Promise<boolean> {
   try {
     await dbSet(STORAGE_KEYS.BASE_IMAGE, dataUrl);
+    return true;
   } catch (e) {
     console.warn('IndexedDB save failed for base image', e);
+    return false;
   }
 }
 
@@ -44,11 +46,13 @@ export async function loadBaseImage(): Promise<string | null> {
   }
 }
 
-export async function saveMouthImages(images: MouthImages): Promise<void> {
+export async function saveMouthImages(images: MouthImages): Promise<boolean> {
   try {
     await dbSet(STORAGE_KEYS.MOUTH_IMAGES, JSON.stringify(images));
+    return true;
   } catch (e) {
     console.warn('IndexedDB save failed for mouth images', e);
+    return false;
   }
 }
 
@@ -76,11 +80,13 @@ export async function loadAssetTransforms(): Promise<Record<string, AssetTransfo
   return null;
 }
 
-export async function saveEyeImages(images: EyeImages): Promise<void> {
+export async function saveEyeImages(images: EyeImages): Promise<boolean> {
   try {
     await dbSet(STORAGE_KEYS.EYE_IMAGES, JSON.stringify(images));
+    return true;
   } catch (e) {
     console.warn('IndexedDB save failed for eye images', e);
+    return false;
   }
 }
 
@@ -92,11 +98,13 @@ export async function loadEyeImages(): Promise<EyeImages | null> {
   return null;
 }
 
-export async function saveBaseImage2(dataUrl: string): Promise<void> {
+export async function saveBaseImage2(dataUrl: string): Promise<boolean> {
   try {
     await dbSet(STORAGE_KEYS.BASE_IMAGE_2, dataUrl);
+    return true;
   } catch (e) {
     console.warn('IndexedDB save failed for base image 2', e);
+    return false;
   }
 }
 
@@ -108,11 +116,13 @@ export async function loadBaseImage2(): Promise<string | null> {
   }
 }
 
-export async function saveMouthImages2(images: MouthImages): Promise<void> {
+export async function saveMouthImages2(images: MouthImages): Promise<boolean> {
   try {
     await dbSet(STORAGE_KEYS.MOUTH_IMAGES_2, JSON.stringify(images));
+    return true;
   } catch (e) {
     console.warn('IndexedDB save failed for mouth images 2', e);
+    return false;
   }
 }
 
@@ -124,11 +134,13 @@ export async function loadMouthImages2(): Promise<MouthImages | null> {
   return null;
 }
 
-export async function saveEyeImages2(images: EyeImages): Promise<void> {
+export async function saveEyeImages2(images: EyeImages): Promise<boolean> {
   try {
     await dbSet(STORAGE_KEYS.EYE_IMAGES_2, JSON.stringify(images));
+    return true;
   } catch (e) {
     console.warn('IndexedDB save failed for eye images 2', e);
+    return false;
   }
 }
 

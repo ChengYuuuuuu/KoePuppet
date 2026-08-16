@@ -397,22 +397,43 @@ export default function App() {
 
   useEffect(() => {
     loadBaseImage().then((saved) => {
-      if (saved) setAssets((prev) => ({ ...prev, baseImage: saved }));
+      if (!saved) return;
+      setAssets((prev) =>
+        prev.baseImage !== defaultAssets.baseImage ? prev : { ...prev, baseImage: saved }
+      );
     });
     loadMouthImages().then((saved) => {
-      if (saved) setAssets((prev) => ({ ...prev, mouthImages: { ...prev.mouthImages, ...saved } }));
+      if (!saved) return;
+      setAssets((prev) => {
+        const userChanged = Object.keys(saved).some(
+          (k) => prev.mouthImages[k as keyof MouthImages] !== defaultMouthImages[k as keyof MouthImages]
+        );
+        return userChanged ? prev : { ...prev, mouthImages: { ...prev.mouthImages, ...saved } };
+      });
     });
     loadEyeImages().then((saved) => {
-      if (saved) setAssets((prev) => ({ ...prev, eyeImages: { ...prev.eyeImages, ...saved } }));
+      if (!saved) return;
+      setAssets((prev) =>
+        prev.eyeImages.blink !== defaultEyeImages.blink ? prev : { ...prev, eyeImages: { ...prev.eyeImages, ...saved } }
+      );
     });
     loadBaseImage2().then((saved) => {
-      if (saved) setAssets2((prev) => ({ ...prev, baseImage: saved }));
+      if (!saved) return;
+      setAssets2((prev) => (prev.baseImage !== null ? prev : { ...prev, baseImage: saved }));
     });
     loadMouthImages2().then((saved) => {
-      if (saved) setAssets2((prev) => ({ ...prev, mouthImages: { ...prev.mouthImages, ...saved } }));
+      if (!saved) return;
+      setAssets2((prev) =>
+        Object.values(prev.mouthImages).some((v) => v !== null)
+          ? prev
+          : { ...prev, mouthImages: { ...prev.mouthImages, ...saved } }
+      );
     });
     loadEyeImages2().then((saved) => {
-      if (saved) setAssets2((prev) => ({ ...prev, eyeImages: { ...prev.eyeImages, ...saved } }));
+      if (!saved) return;
+      setAssets2((prev) =>
+        prev.eyeImages.blink !== null ? prev : { ...prev, eyeImages: { ...prev.eyeImages, ...saved } }
+      );
     });
   }, []);
 
