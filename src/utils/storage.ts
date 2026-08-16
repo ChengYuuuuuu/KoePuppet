@@ -1,5 +1,5 @@
 import { type UIConfig, DEFAULT_UI_CONFIG, type MouthImages, type EyeImages, type AssetTransform } from '../types/index';
-import { dbGet, dbSet } from './db';
+import { dbGet, dbSet, dbDelete } from './db';
 
 const STORAGE_KEYS = {
   UI_CONFIG: 'lip-sync-ui-config',
