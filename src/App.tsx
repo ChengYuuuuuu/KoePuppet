@@ -23,27 +23,18 @@ import {
 } from './types/index';
 import './styles/app.css';
 
-import tetoBase from './assets/teto-底.png';
-import tetoA from './assets/teto-a.png';
-import tetoE from './assets/teto-e.png';
-import tetoI from './assets/teto-i.png';
-import tetoO from './assets/teto-o.png';
-import tetoU from './assets/teto-u.png';
-import tetoClosed from './assets/teto-closed.png';
-import tetoBlink from './assets/teto-闭.png';
-
-const defaultMouthImages: MouthImages = {
-  A: tetoA, E: tetoE, I: tetoI, O: tetoO, U: tetoU, closed: tetoClosed,
+const EMPTY_MOUTH_IMAGES: MouthImages = {
+  A: null, E: null, I: null, O: null, U: null, closed: null,
 };
 
-const defaultEyeImages: EyeImages = {
-  blink: tetoBlink,
+const EMPTY_EYE_IMAGES: EyeImages = {
+  blink: null,
 };
 
 const defaultAssets: CharacterAssets = {
-  baseImage: tetoBase,
-  mouthImages: { ...defaultMouthImages },
-  eyeImages: { ...defaultEyeImages },
+  baseImage: null,
+  mouthImages: { ...EMPTY_MOUTH_IMAGES },
+  eyeImages: { ...EMPTY_EYE_IMAGES },
 };
 
 export default function App() {
@@ -418,23 +409,20 @@ export default function App() {
   useEffect(() => {
     loadBaseImage().then((saved) => {
       if (!saved) return;
-      setAssets((prev) =>
-        prev.baseImage !== defaultAssets.baseImage ? prev : { ...prev, baseImage: saved }
-      );
+      setAssets((prev) => (prev.baseImage !== null ? prev : { ...prev, baseImage: saved }));
     });
     loadMouthImages().then((saved) => {
       if (!saved) return;
-      setAssets((prev) => {
-        const userChanged = Object.keys(saved).some(
-          (k) => prev.mouthImages[k as keyof MouthImages] !== defaultMouthImages[k as keyof MouthImages]
-        );
-        return userChanged ? prev : { ...prev, mouthImages: { ...prev.mouthImages, ...saved } };
-      });
+      setAssets((prev) =>
+        Object.values(prev.mouthImages).some((v) => v !== null)
+          ? prev
+          : { ...prev, mouthImages: { ...prev.mouthImages, ...saved } }
+      );
     });
     loadEyeImages().then((saved) => {
       if (!saved) return;
       setAssets((prev) =>
-        prev.eyeImages.blink !== defaultEyeImages.blink ? prev : { ...prev, eyeImages: { ...prev.eyeImages, ...saved } }
+        prev.eyeImages.blink !== null ? prev : { ...prev, eyeImages: { ...prev.eyeImages, ...saved } }
       );
     });
     loadBaseImage2().then((saved) => {

@@ -1150,7 +1150,7 @@ export function RightPanel({
         <div className="label">角色</div>
         <div className="char-selector">
           <button
-            className={`char-tab${activeChar === 1 ? ' active' : ''}`}
+            className={`char-tab${!assets.baseImage ? ' disabled' : ''}${activeChar === 1 ? ' active' : ''}`}
             onClick={() => setActiveChar(1)}
           >
             角色1
@@ -1162,6 +1162,9 @@ export function RightPanel({
             角色2
           </button>
         </div>
+        {activeChar === 1 && !assets.baseImage && (
+          <div className="char-hint">角色1 未导入底图，上传底图后激活</div>
+        )}
         {activeChar === 2 && !assets2.baseImage && (
           <div className="char-hint">角色2 未导入底图，上传底图后激活</div>
         )}
@@ -1196,15 +1199,17 @@ export function RightPanel({
               >
                 复位位置
               </button>
-              <button
-                className="char-remove-btn"
-                onClick={async () => {
-                  const ok = (await onRemoveChar?.(1)) ?? true;
-                  if (!ok) setAssetError('角色1 素材清除失败，刷新后可能仍在');
-                }}
-              >
-                移除角色1
-              </button>
+              {assets.baseImage && (
+                <button
+                  className="char-remove-btn"
+                  onClick={async () => {
+                    const ok = (await onRemoveChar?.(1)) ?? true;
+                    if (!ok) setAssetError('角色1 素材清除失败，刷新后可能仍在');
+                  }}
+                >
+                  移除角色1
+                </button>
+              )}
             </>
           ) : (
             <>
