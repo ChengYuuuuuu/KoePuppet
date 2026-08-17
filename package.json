@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "demucs-web": "^1.0.2",
+    "mp4-muxer": "^5.2.2",
     "onnxruntime-web": "^1.27.0",
     "pinyin-pro": "^3.28.2",
     "pleco-xa": "^2.0.5",

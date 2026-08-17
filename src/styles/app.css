@@ -528,6 +528,26 @@ html, body, #root {
   display: none;
 }
 
+/* MP4 export */
+.export-btn {
+  background: #0a84ff;
+}
+
+.export-progress {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.export-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #86868b;
+  font-family: 'Inter', sans-serif;
+}
+
 /* Character selector */
 .char-selector {
   display: flex;

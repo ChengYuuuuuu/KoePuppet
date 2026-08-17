@@ -6,6 +6,8 @@ import { loadImage } from './utils/renderer';
 import { saveUIConfig, loadUIConfig, loadBaseImage, loadMouthImages, loadAssetTransforms, saveAssetTransforms, loadEyeImages, loadBaseImage2, loadMouthImages2, loadEyeImages2, clearAssets, clearAssets2 } from './utils/storage';
 import { analyzeSofaUrlChunked } from './utils/streamingSofa';
 import { phonemesToMouthPoints } from './utils/mouthMapper';
+import { exportToMP4, type ExportInput, type ExportUiState } from './utils/exporter';
+import { downloadAndDecodeAudio, fileToAudioBuffer } from './utils/client/audioDecoder';
 import {
   type LyricLine,
   type CharacterAssets,
@@ -76,6 +78,9 @@ export default function App() {
   const [transforms, setTransforms] = useState<Record<string, AssetTransform>>({});
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
 
+  const [exportState, setExportState] = useState<ExportUiState>({ status: 'idle', progress: 0, message: '' });
+  const exportCancelRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+
   useEffect(() => {
     loadAssetTransforms().then(saved => {
       if (saved) setTransforms(saved);
@@ -125,6 +130,7 @@ export default function App() {
   const energyHistoryRef = useRef<number[]>([]);
   const blinkTimerRef = useRef<number[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
   const receivedChunksRef = useRef<Map<number, MouthPoint[]>>(new Map());
   configRef.current = config;
   beatTimesRef.current = beatTimes;
@@ -309,6 +315,7 @@ export default function App() {
       setLyricsList(lyricsList);
 
       if (data.audioUrl) {
+        audioUrlRef.current = data.audioUrl;
         abortControllerRef.current?.abort();
         receivedChunksRef.current.clear();
 
@@ -405,6 +412,80 @@ export default function App() {
       scaleY: 1,
     };
   }, [beatTimes]);
+
+  const handleExport = useCallback(async (file?: File) => {
+    const cancel = exportCancelRef.current;
+    cancel.cancelled = false;
+    setExportState({ status: 'exporting', progress: 0, message: '准备导出…' });
+
+    let audioBuffer: AudioBuffer | null = null;
+    if (file) {
+      audioBuffer = await fileToAudioBuffer(file);
+    } else {
+      audioBuffer = audioEngineRef.current?.getBuffer() ?? null;
+      if (!audioBuffer && audioUrlRef.current) {
+        audioBuffer = await downloadAndDecodeAudio(audioUrlRef.current);
+      }
+    }
+
+    if (!audioBuffer) {
+      setExportState({ status: 'error', progress: 0, message: '无法获取音频，请先加载歌曲或上传本地音频' });
+      return;
+    }
+
+    const input: ExportInput = {
+      audioBuffer,
+      timeline: whisperTimelineRef.current,
+      beatTimes: beatTimesRef.current,
+      lyrics: lyricsList,
+      charAssignments,
+      config,
+      transforms,
+      assets,
+      assets2,
+      baseImage: baseImageLoaded,
+      mouthImages: mouthImagesLoaded,
+      eyeImages: eyeImagesLoaded,
+      baseImage2: baseImageLoaded2,
+      mouthImages2: mouthImagesLoaded2,
+      eyeImages2: eyeImagesLoaded2,
+      title: songInfo?.title ?? '',
+    };
+
+    try {
+      await exportToMP4(input, {
+        onStatus: (msg) => setExportState((prev) => ({ ...prev, message: msg })),
+        onProgress: (p) => setExportState((prev) => ({ ...prev, progress: p })),
+        isCancelled: () => cancel.cancelled,
+      });
+      setExportState({ status: 'done', progress: 100, message: '导出完成' });
+    } catch (err) {
+      setExportState({
+        status: 'error',
+        progress: 0,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }, [
+    lyricsList,
+    charAssignments,
+    config,
+    transforms,
+    assets,
+    assets2,
+    baseImageLoaded,
+    mouthImagesLoaded,
+    eyeImagesLoaded,
+    baseImageLoaded2,
+    mouthImagesLoaded2,
+    eyeImagesLoaded2,
+    songInfo,
+  ]);
+
+  const handleCancelExport = useCallback(() => {
+    exportCancelRef.current.cancelled = true;
+    setExportState((prev) => ({ ...prev, message: '正在取消…' }));
+  }, []);
 
   useEffect(() => {
     loadBaseImage().then((saved) => {
@@ -531,6 +612,9 @@ export default function App() {
           onAssignLyrics={handleAssignLyrics}
           onResetAssetTransform={handleResetAssetTransform}
           onRemoveChar={handleRemoveChar}
+          exportState={exportState}
+          onExport={handleExport}
+          onCancelExport={handleCancelExport}
         />
       </div>
     </div>

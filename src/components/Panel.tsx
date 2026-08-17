@@ -21,6 +21,7 @@ import { saveBaseImage, saveMouthImages, saveEyeImages, saveBaseImage2, saveMout
 import { renderFrame, getAssetCenter, getAssetSize, computeVisibleBounds, type VisibleBounds } from '../utils/renderer';
 import { parseLyricText } from '../utils/lyrics';
 import { AudioEngine, computeSway } from '../utils/audio';
+import type { ExportUiState } from '../utils/exporter';
 
 const HANDLE_RADIUS = 8;
 const ROTATE_RADIUS = 10;
@@ -748,6 +749,9 @@ interface RightPanelProps {
   onAssignLyrics?: (assignments: Record<string, LyricAssignment>) => void;
   onResetAssetTransform?: (key: string) => void;
   onRemoveChar?: (char: 1 | 2) => Promise<boolean>;
+  exportState?: ExportUiState;
+  onExport?: (file?: File) => void;
+  onCancelExport?: () => void;
 }
 
 const MOUTH_KEYS: (keyof MouthImages)[] = ['closed', 'A', 'E', 'I', 'O', 'U'];
@@ -783,6 +787,9 @@ export function RightPanel({
   onAssignLyrics,
   onResetAssetTransform,
   onRemoveChar,
+  exportState,
+  onExport,
+  onCancelExport,
 }: RightPanelProps) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -791,6 +798,7 @@ export function RightPanel({
   const [activeChar, setActiveChar] = useState<1 | 2>(1);
   const [showAssigner, setShowAssigner] = useState(false);
   const [assetError, setAssetError] = useState('');
+  const audioFileRef = useRef<File | null>(null);
   const modelLoadState = useSyncExternalStore(subscribeModelLoadState, getModelLoadState);
   const analysisState = useSyncExternalStore(subscribeAnalysisState, getAnalysisState);
 
@@ -930,6 +938,7 @@ export function RightPanel({
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    audioFileRef.current = file;
     setFileAnalyzing(true);
     const result = await analyzeSofaFile(file, fileLyrics, config.vocalSeparation);
     if (result.success && result.phonemes) {
@@ -959,6 +968,27 @@ export function RightPanel({
     },
     [charAssignments, onAssignLyrics]
   );
+
+  const exp = exportState;
+  const exportProgressUI =
+    exp && exp.status !== 'idle' ? (
+      <div className="export-progress">
+        <div className="export-progress-label">
+          <span>{exp.message}</span>
+          {exp.status === 'exporting' && <span>{Math.round(exp.progress)}%</span>}
+        </div>
+        {(exp.status === 'exporting' || exp.status === 'done') && (
+          <div className="model-progress-track">
+            <div
+              className="model-progress-fill"
+              style={{ width: `${Math.min(100, Math.max(0, exp.progress))}%` }}
+            />
+          </div>
+        )}
+        {exp.status === 'error' && <div className="model-progress-error">{exp.message}</div>}
+        {exp.status === 'done' && <div className="model-progress-done">已下载，可查看视频文件</div>}
+      </div>
+    ) : null;
 
   return (
     <div className="right-panel">
@@ -1294,6 +1324,25 @@ export function RightPanel({
             <input type="file" accept=".lrc,.txt" onChange={handleLrcUpload} />
           </label>
         </div>
+      </div>
+
+      <div className="asset-section">
+        <div className="label">导出MP4</div>
+        <div className="asset-btns">
+          <button
+            className="asset-btn export-btn"
+            disabled={exportState?.status === 'exporting'}
+            onClick={() => onExport?.(audioFileRef.current ?? undefined)}
+          >
+            {exportState?.status === 'exporting' ? '导出中…' : '导出MP4'}
+          </button>
+          {exportState?.status === 'exporting' && (
+            <button className="asset-btn" onClick={onCancelExport}>
+              取消
+            </button>
+          )}
+        </div>
+        {exportProgressUI}
       </div>
 
       {showAssigner && (

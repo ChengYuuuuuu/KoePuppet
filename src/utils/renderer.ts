@@ -39,6 +39,7 @@ export interface RenderContext {
   eyeImagesLoaded: Record<string, HTMLImageElement | null>;
   isBlinking: boolean;
   charAssignments?: Record<string, LyricAssignment>;
+  showHUD?: boolean;
 }
 
 const visibleBoundsCache = new WeakMap<HTMLImageElement, VisibleBounds>();
@@ -98,7 +99,7 @@ export function renderFrame(r: RenderContext): void {
   ctx.clearRect(0, 0, width, height);
   drawBackground(ctx, width, height, r.config.backgroundColor);
   drawCharacter(r);
-  drawHUD(r);
+  if (r.showHUD !== false) drawHUD(r);
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, width: number, height: number, color: string): void {

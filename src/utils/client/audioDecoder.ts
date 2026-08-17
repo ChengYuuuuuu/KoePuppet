@@ -1,6 +1,6 @@
 export async function downloadAndDecodeAudio(url: string): Promise<AudioBuffer | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { mode: 'cors' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     const arrayBuffer = await blob.arrayBuffer();

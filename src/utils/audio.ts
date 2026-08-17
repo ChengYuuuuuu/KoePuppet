@@ -261,6 +261,10 @@ export class AudioEngine {
     return this.context;
   }
 
+  getBuffer(): AudioBuffer | null {
+    return this.buffer;
+  }
+
   onFrameUpdate(callback: (data: AudioAnalyserData, currentTime: number) => void): void {
     this.onFrame = callback;
   }
