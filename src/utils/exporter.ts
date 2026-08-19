@@ -136,6 +136,39 @@ async function pickVideoCodec(width: number, height: number, fps: number): Promi
   throw new Error('当前浏览器不支持 H.264 视频编码');
 }
 
+function extractAvcC(data: Uint8Array): Uint8Array | null {
+  let sps: Uint8Array | null = null;
+  let pps: Uint8Array | null = null;
+  let off = 0;
+  while (off + 4 <= data.length) {
+    const len = (data[off] << 24) | (data[off + 1] << 16) | (data[off + 2] << 8) | data[off + 3];
+    if (len <= 0 || off + 4 + len > data.length) break;
+    const nalType = data[off + 4] & 0x1f;
+    if (nalType === 7) sps = data.slice(off + 4, off + 4 + len);
+    else if (nalType === 8) pps = data.slice(off + 4, off + 4 + len);
+    if (sps && pps) break;
+    off += 4 + len;
+  }
+  if (!sps || !pps) return null;
+
+  const record = new Uint8Array(1 + 1 + 1 + 1 + 2 + 1 + 2 + sps.length + 1 + 2 + pps.length);
+  record[0] = 1; // configurationVersion
+  record[1] = sps[0]; // AVCProfileIndication
+  record[2] = sps[1]; // profile_compatibility
+  record[3] = sps[2]; // AVCLevelIndication
+  record[4] = 0xff; // reserved(6) + lengthSizeMinusOne(2) = 4-byte NAL length
+  record[5] = 0xe1; // reserved(3) + numOfSPS(5)
+  record[6] = (sps.length >> 8) & 0xff;
+  record[7] = sps.length & 0xff;
+  record.set(sps, 8);
+  const ppsOffset = 8 + sps.length;
+  record[ppsOffset] = 1; // numOfPPS
+  record[ppsOffset + 1] = (pps.length >> 8) & 0xff;
+  record[ppsOffset + 2] = pps.length & 0xff;
+  record.set(pps, ppsOffset + 3);
+  return record;
+}
+
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -186,8 +219,30 @@ export async function exportToMP4(input: ExportInput, cb: ExportCallbacks): Prom
 
   const videoCodec = await pickVideoCodec(width, height, fps);
   cb.onStatus('初始化视频编码器…');
+  let videoDecoderConfig: VideoDecoderConfig | null = null;
+  let firstChunkData: Uint8Array | null = null;
   const videoEncoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    output: (chunk, meta) => {
+      if (!videoDecoderConfig) {
+        if (meta?.decoderConfig) {
+          videoDecoderConfig = meta.decoderConfig;
+        } else if (!firstChunkData) {
+          firstChunkData = new Uint8Array(chunk.byteLength);
+          chunk.copyTo(firstChunkData);
+          const avcC = extractAvcC(firstChunkData);
+          if (avcC) {
+            videoDecoderConfig = {
+              codec: videoCodec,
+              codedWidth: width,
+              codedHeight: height,
+              description: avcC,
+              colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: true },
+            };
+          }
+        }
+      }
+      muxer.addVideoChunk(chunk, videoDecoderConfig ? { decoderConfig: videoDecoderConfig } : meta);
+    },
     error: fail,
   });
   videoEncoder.configure({
@@ -306,10 +361,21 @@ export async function exportToMP4(input: ExportInput, cb: ExportCallbacks): Prom
     overlay.update(ctx, t, currentLyric, input.charAssignments);
     overlay.draw(ctx, width, height, input.transforms);
 
-    const frame = new VideoFrame(canvas, {
+    const frameInit = {
       timestamp: Math.round(t * 1_000_000),
       duration: Math.round(step * 1_000_000),
-    });
+    };
+    let frame: VideoFrame;
+    try {
+      const bitmap = await createImageBitmap(canvas);
+      try {
+        frame = new VideoFrame(bitmap, frameInit);
+      } finally {
+        bitmap.close();
+      }
+    } catch {
+      frame = new VideoFrame(canvas, frameInit);
+    }
     videoEncoder.encode(frame);
     frame.close();
 
