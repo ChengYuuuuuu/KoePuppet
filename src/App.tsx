@@ -362,17 +362,6 @@ export default function App() {
     [setupAudioEngine, loadAudioToEngine]
   );
 
-  const handleWhisperResult = useCallback((mouthPoints: MouthPoint[]) => {
-    whisperTimelineRef.current = mouthPoints;
-  }, []);
-
-  const handleFileAnalyze = useCallback((result: { bpm: number | null; beats: number[]; mouthPoints: MouthPoint[] }) => {
-    whisperTimelineRef.current = result.mouthPoints;
-    if (result.beats.length > 0) {
-      setBeatTimes(result.beats);
-    }
-  }, []);
-
   const handleLyricsLoad = useCallback((lrcText: string) => {
     parseLRC(lrcText);
   }, []);
@@ -584,6 +573,7 @@ export default function App() {
                 <div className="app-tips-title">Tips</div>
                 <div>· 第一次加载需要大约两分钟</div>
                 <div>· 勾选人声分离会让结果更加准确，但是增加一倍的等待时间</div>
+                <div>· 在歌曲分析完毕之前只能看到闭嘴的状态</div>
               </div>
             </div>
           </div>
@@ -602,8 +592,6 @@ export default function App() {
           onLyricsLoad={handleLyricsLoad}
           onSeek={handleSeek}
           songInfo={songInfo}
-          onWhisperResult={handleWhisperResult}
-          onFileAnalyze={handleFileAnalyze}
           analyzing={analyzing}
           editMode={editMode}
           processedRanges={processedRanges}

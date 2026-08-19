@@ -7,15 +7,13 @@ import {
   type PlaybackState,
   type LyricLine,
   type MouthShape,
-  type MouthPoint,
   type AssetTransform,
   type TimeRange,
   type LyricAssignment,
   DEFAULT_TRANSFORM,
 } from '../types/index';
 import { parseSongUrl } from '../utils/api';
-import { phonemesToMouthPoints } from '../utils/mouthMapper';
-import { getModelLoadState, subscribeModelLoadState, ensureModelsLoaded, analyzeSofaFile } from '../utils/streamingSofa';
+import { getModelLoadState, subscribeModelLoadState, ensureModelsLoaded } from '../utils/streamingSofa';
 import { getAnalysisState, subscribeAnalysisState, type AnalysisStage } from '../utils/client/analysisDiag';
 import { saveBaseImage, saveMouthImages, saveEyeImages, saveBaseImage2, saveMouthImages2, saveEyeImages2 } from '../utils/storage';
 import { renderFrame, getAssetCenter, getAssetSize, computeVisibleBounds, type VisibleBounds } from '../utils/renderer';
@@ -738,8 +736,6 @@ interface RightPanelProps {
   onSongLoad: (data: { title: string; artist: string; coverUrl: string; audioUrl: string; lyrics: string }) => void;
   onLyricsLoad: (lrcText: string) => void;
   onSeek: (time: number) => void;
-  onWhisperResult: (mouthPoints: MouthPoint[]) => void;
-  onFileAnalyze: (result: { bpm: number | null; beats: number[]; mouthPoints: MouthPoint[] }) => void;
   songInfo: { title: string; artist: string; coverUrl: string } | null;
   analyzing?: boolean;
   editMode?: boolean;
@@ -776,8 +772,6 @@ export function RightPanel({
   onSongLoad,
   onLyricsLoad,
   onSeek,
-  onWhisperResult,
-  onFileAnalyze,
   songInfo,
   analyzing,
   editMode,
@@ -919,9 +913,11 @@ export function RightPanel({
     [assets, onAssetsChange, assets2, onAssetsChange2]
   );
 
-  const [fileAnalyzing, setFileAnalyzing] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioFileName, setAudioFileName] = useState('');
   const [fileLyrics, setFileLyrics] = useState('');
   const [lrcFileName, setLrcFileName] = useState('');
+  const objectUrlRef = useRef<string | null>(null);
 
   const handleLrcUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -935,22 +931,38 @@ export function RightPanel({
     e.target.value = '';
   }, []);
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     audioFileRef.current = file;
-    setFileAnalyzing(true);
-    const result = await analyzeSofaFile(file, fileLyrics, config.vocalSeparation);
-    if (result.success && result.phonemes) {
-      const mouthPoints = phonemesToMouthPoints(result.phonemes);
-      onWhisperResult(mouthPoints);
-      onFileAnalyze({ bpm: result.bpm ?? null, beats: result.beats ?? [], mouthPoints });
-    } else {
-      console.error('文件分析失败:', result);
-    }
-    setFileAnalyzing(false);
+    setAudioFile(file);
+    setAudioFileName(file.name);
     e.target.value = '';
-  }, [fileLyrics, onWhisperResult, onFileAnalyze, config]);
+  }, []);
+
+  useEffect(() => {
+    if (!audioFile || !fileLyrics.trim()) return;
+    const url = URL.createObjectURL(audioFile);
+    objectUrlRef.current = url;
+    const base = audioFile.name.replace(/\.[^.]+$/, '');
+    onSongLoad({
+      title: base || '本地歌曲',
+      artist: '',
+      coverUrl: '',
+      audioUrl: url,
+      lyrics: fileLyrics,
+    });
+    return () => {
+      if (objectUrlRef.current === url) objectUrlRef.current = null;
+      URL.revokeObjectURL(url);
+    };
+  }, [audioFile, fileLyrics, onSongLoad]);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
@@ -1313,17 +1325,18 @@ export function RightPanel({
       </div>
 
       <div className="asset-section">
-        <div className="label">上传音频测试</div>
+        <div className="label">上传本地歌曲</div>
         <div className="asset-btns">
-          <label className={`asset-btn ${fileAnalyzing ? '' : ''}`}>
-            {fileAnalyzing ? '分析中...' : '选择音频文件'}
-            <input type="file" accept="audio/*" onChange={handleFileUpload} disabled={fileAnalyzing} />
+          <label className={`asset-btn ${audioFileName ? 'uploaded' : ''}`}>
+            {audioFileName || '选择音频文件'}
+            <input type="file" accept="audio/*" onChange={handleFileUpload} disabled={analyzing} />
           </label>
           <label className={`asset-btn ${lrcFileName ? 'uploaded' : ''}`}>
             {lrcFileName || '选择LRC歌词'}
-            <input type="file" accept=".lrc,.txt" onChange={handleLrcUpload} />
+            <input type="file" accept=".lrc,.txt" onChange={handleLrcUpload} disabled={analyzing} />
           </label>
         </div>
+        <div className="char-hint">选择音频和 LRC 后自动开始分析</div>
       </div>
 
       <div className="asset-section">
