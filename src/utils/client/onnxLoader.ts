@@ -1,6 +1,6 @@
-import * as ort from 'onnxruntime-web';
+import * as ort from 'onnxruntime-web/wasm';
 
-ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/';
+ort.env.wasm.wasmPaths = '/ort-wasm/';
 ort.env.wasm.proxy = false;
 
 if (typeof navigator !== 'undefined' && 'gpu' in navigator) {

@@ -1,8 +1,8 @@
-import * as ort from 'onnxruntime-web';
+import * as ort from 'onnxruntime-web/wasm';
 import { DemucsProcessor } from 'demucs-web';
 import { fetchWithProgress, DEMUCS_MODEL_SIZE } from './onnxLoader';
 
-ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/';
+ort.env.wasm.wasmPaths = '/ort-wasm/';
 
 const DEMUCS_MODEL_PATH = 'https://pub-73fe157bf73b4d7c9382639fac8a7451.r2.dev/htdemucs_ft_vocals_safe16.onnx';
 
@@ -17,7 +17,7 @@ export async function loadDemucs(
   processor = new DemucsProcessor({
     ort,
     sessionOptions: {
-      executionProviders: ['webgpu', 'wasm'],
+      executionProviders: ['wasm'],
       graphOptimizationLevel: 'basic',
     },
   });

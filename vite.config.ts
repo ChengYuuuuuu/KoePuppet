@@ -50,6 +50,9 @@ export default defineConfig({
     host: '127.0.0.1',
     allowedHosts: ['.trycloudflare.com'],
   },
+  resolve: {
+    conditions: ['onnxruntime-web-use-extern-wasm'],
+  },
   optimizeDeps: {
     exclude: ['onnxruntime-web'],
   },

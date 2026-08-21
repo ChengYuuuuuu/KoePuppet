@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# onnxruntime wasm (copied from node_modules at build time)
+public/ort-wasm/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
