@@ -569,6 +569,13 @@ export default function App() {
               >
                 {editMode ? '确认' : '编辑'}
               </button>
+              <button
+                className="canvas-edit-btn canvas-reset-lyric-btn"
+                onClick={() => handleResetAssetTransform('lyric')}
+                title="复位气泡歌词框"
+              >
+                歌词框复位
+              </button>
               <div className="app-tips">
                 <div className="app-tips-title">Tips</div>
                 <div>· 第一次加载需要大约两分钟</div>

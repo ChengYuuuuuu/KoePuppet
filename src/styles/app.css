@@ -81,6 +81,10 @@ html, body, #root {
   opacity: 1;
 }
 
+.canvas-reset-lyric-btn {
+  top: 56px;
+}
+
 /* ── Right Panel (25%) ── */
 .right-panel {
   width: 25%;
@@ -1146,6 +1150,10 @@ html, body, #root {
     left: auto;
     padding: 10px 20px;
     font-size: 16px;
+  }
+
+  .canvas-reset-lyric-btn {
+    top: 58px;
   }
 
   /* Tips: smaller */
